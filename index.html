@@ -1,0 +1,79 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Ruta Viral China</title>
+<meta name="description" content="Réplicas, panaderías virales, restaurantes, tecnología y noches en Beijing, Xi'an, Chengdu, Lijiang y Shanghái. Funciona sin internet.">
+<meta name="robots" content="noindex">
+<meta name="theme-color" content="#EFF2EE" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0D1311" media="(prefers-color-scheme: dark)">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192.png">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Ruta Viral">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="stylesheet" href="fonts.css">
+<link rel="stylesheet" href="app.css">
+</head>
+<body>
+
+<header class="top">
+  <div class="wrap">
+    <div class="mast"><b>Ruta Viral China</b><span class="status" id="status" aria-live="polite"></span></div>
+    <ol class="route" id="route"></ol>
+  </div>
+</header>
+
+<div class="wrap">
+  <div class="install" id="install" hidden></div>
+  <div class="search">
+    <label class="sr" for="q">Buscar lugares</label>
+    <input id="q" type="search" placeholder="Buscar en las 5 ciudades: pato, Pop Mart, 小笼包…" autocomplete="off" enterkeyhint="search">
+  </div>
+</div>
+
+<main class="wrap" id="app"></main>
+
+<footer class="wrap foot">
+  <section class="offline" id="offline">
+    <h2 class="lbl">Sin internet</h2>
+    <p id="offline-state">Revisando qué está guardado en este teléfono…</p>
+    <ol>
+      <li><b>iPhone:</b> abre el link en Safari → <b>Compartir</b> → <b>Agregar a inicio</b>. Ábrela desde el ícono 去 con Wi-Fi hasta que diga “Lista sin internet”.</li>
+      <li><b>Android:</b> en Chrome, menú ⋮ → <b>Instalar app</b>.</li>
+      <li>Pruébala en modo avión antes de volar y ábrela un par de veces en los días previos.</li>
+    </ol>
+  </section>
+
+  <h2 class="lbl">Para todo el viaje</h2>
+  <ul>
+    <li><b>Antes de volar:</b> eSIM con VPN (WhatsApp, Google e Instagram están bloqueados), Alipay con tu tarjeta ligada y Didi abierto desde Alipay. Casi nadie acepta tarjeta física.</li>
+    <li><b>Dianping (大众点评):</b> “在线取号” te forma en la fila en línea; “订座” reserva mesa. Úsalo para los lugares con filas de horas.</li>
+    <li><b>Reserva ya:</b> Da Dong en Beijing, la ópera Shufeng Yayun en Chengdu, Old Jesse y el cangrejo en Shanghái. Opcional: Everlasting Regret en Xi'an.</li>
+    <li><b>Réplicas:</b> pocas piezas por marca y de uso personal. Las aduanas de México y de la UE pueden decomisarlas.</li>
+    <li><b>El sello 去</b> abre el nombre y la dirección en chino a pantalla completa para enseñárselos al taxista o copiarlos a Didi.</li>
+  </ul>
+  <p class="fine">Investigado en septiembre de 2026 con fuentes de 2025–2026. “Sin verificar” significa que no se pudo confirmar abierto o con ese horario: revísalo en Dianping antes de ir. Precios aproximados en yuanes (¥). Fotos de Wikimedia Commons con licencia libre; las marcadas “Foto ilustrativa” muestran el platillo o la zona, no el local exacto.</p>
+</footer>
+
+<dialog id="driver" aria-labelledby="dz">
+  <div class="card">
+    <p class="ask" id="dask" lang="zh">师傅，请带我去这里：</p>
+    <p class="big" id="dz" lang="zh"></p>
+    <p class="where" id="da" lang="zh"></p>
+    <p class="es" id="dn"></p>
+    <div class="row">
+      <button class="btn primary" id="dcopy" type="button">Copiar para Didi</button>
+      <a class="btn" id="dmap" target="_blank" rel="noopener">Mapas (con internet)</a>
+      <button class="btn" id="dclose" type="button">Cerrar</button>
+    </div>
+  </div>
+</dialog>
+
+<script src="data.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
