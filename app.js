@@ -11,6 +11,7 @@ const VERSION = window.ASSETS_VERSION || "dev";
 const TABS = ["ciudades", "buscar", "hoy", "virales", "mas"];
 const byId = Object.fromEntries(P.map(p => [p.id, p]));
 const cityOf = id => CITIES.find(c => c.id === id);
+const cityCode = c => c.id.toUpperCase();
 const HANGUL = /[가-힯]/;
 const langOf = s => HANGUL.test(s || "") ? "ko" : "zh";
 
@@ -149,7 +150,7 @@ function entryHTML(p, withCity){
       ${p.s ? `<a class="src" href="${esc(p.s)}" target="_blank" rel="noopener">Fuente ↗</a>` : ""}
     </div>
     <div class="side">
-      <button class="go" type="button" data-go="${p.id}" aria-label="Mostrar ${esc(p.n)} al chofer" lang="zh">去</button>
+      <button class="go" type="button" data-go="${p.id}" aria-label="Mostrar ${esc(p.n)} al chofer">Ir</button>
       <small>chofer</small>
       <button class="fav" type="button" data-fav="${p.id}" aria-pressed="${on}" aria-label="${on ? "Quitar de guardados" : "Guardar"}">${on ? "★" : "☆"}</button>
     </div>
@@ -168,7 +169,7 @@ function recHTML(p){
       ${p.p ? `<span class="meta"><span>${esc(p.p)}</span></span>` : ""}
     </button>
     <div class="side">
-      <button class="go" type="button" data-go="${p.id}" aria-label="Mostrar ${esc(p.n)} al chofer" lang="zh">去</button>
+      <button class="go" type="button" data-go="${p.id}" aria-label="Mostrar ${esc(p.n)} al chofer">Ir</button>
       <button class="fav" type="button" data-fav="${p.id}" aria-pressed="${on}" aria-label="${on ? "Quitar de guardados" : "Guardar"}">${on ? "★" : "☆"}</button>
     </div>
   </article>`;
@@ -189,12 +190,12 @@ function renderCity(app){
   app.innerHTML = `
     <div class="citypick" id="citypick" role="toolbar" aria-label="Elegir ciudad">
       ${CITIES.map(x => `<button class="cp" type="button" data-pick-city="${x.id}" aria-pressed="${x.id === c.id}">
-        <span class="sc" lang="zh">${x.sc}</span><span class="es">${esc(x.es)}</span><span class="dt">${esc(x.dates)}</span>
+        <span class="es">${esc(x.es)}</span><span class="dt">${esc(x.dates)}</span>
       </button>`).join("")}
     </div>
 
     <section class="city-head">
-      <p class="city-sc" lang="zh" aria-hidden="true">${c.sc}</p>
+      <p class="city-sc" aria-hidden="true">${cityCode(c)}</p>
       <div class="city-meta">
         <span class="dt">${esc(c.dates)}</span>
         <h1>${esc(c.es)}</h1>
@@ -311,12 +312,12 @@ function renderHoy(app){
     </div>
     <div class="daystrip" id="daystrip" role="toolbar" aria-label="Días del viaje">
       ${days.map(x => `<button class="dchip${x.date === t ? " is-today" : ""}" type="button" data-day="${x.date}" aria-pressed="${x.date === d.date}">
-        <span class="dw">${esc(x.short)}</span><span class="dc" lang="zh">${cityOf(x.city).sc}</span>
+        <span class="dw">${esc(x.short)}</span><span class="dc">${cityCode(cityOf(x.city))}</span>
       </button>`).join("")}
     </div>
 
     <section class="city-head day-head">
-      <p class="city-sc" lang="zh" aria-hidden="true">${c.sc}</p>
+      <p class="city-sc" aria-hidden="true">${cityCode(c)}</p>
       <div class="city-meta">
         <span class="dt">${to ? `${esc(c.es)} → ${esc(to.es)}` : esc(c.es)}</span>
         <h1>${esc(d.title)}</h1>
@@ -327,7 +328,7 @@ function renderHoy(app){
 
     <h2 class="lbl">Tu día</h2>
     <ol class="tl day-tl">${d.items.map(it => `<li><span class="tm">${esc(it.time || "")}</span><span>${esc(it.text)}</span></li>`).join("")}</ol>
-    ${transfers.length ? `<div class="row go-row">${transfers.map(tr => `<button class="btn go-btn" type="button" data-transfer="${esc(tr.id)}"><span lang="zh">去</span>${esc(tr.n)}</button>`).join("")}</div>` : ""}
+    ${transfers.length ? `<div class="row go-row">${transfers.map(tr => `<button class="btn go-btn" type="button" data-transfer="${esc(tr.id)}">Ir · ${esc(tr.n)}</button>`).join("")}</div>` : ""}
 
     ${slots.length ? `<h2 class="lbl">Tu rato libre</h2>${slots.map(s => `<p class="gp"><span class="tm">${esc(s[1])}</span> ${esc(s[2])}</p>`).join("")}` : ""}
 
@@ -362,7 +363,7 @@ function renderVirales(app){
   const cats = Object.entries(CATS).filter(([k]) => scoped.some(p => p.k === k));
   app.innerHTML = `
     <section class="city-head">
-      <p class="city-sc" lang="zh" aria-hidden="true">热门</p>
+      <p class="city-sc" aria-hidden="true">VIRAL</p>
       <div class="city-meta">
         <span class="dt">TikTok · Instagram · Xiaohongshu</span>
         <h1>Lo más viral</h1>
@@ -371,15 +372,15 @@ function renderVirales(app){
     </section>
     <div class="chips" role="toolbar" aria-label="Filtrar virales por ciudad">
       <button class="chip" type="button" data-vcity="all" aria-pressed="${state.vcity === "all"}">Todas</button>
-      ${CITIES.filter(c => pool.some(p => p.c === c.id)).map(c => `<button class="chip" type="button" data-vcity="${c.id}" aria-pressed="${state.vcity === c.id}"><span lang="zh">${c.sc}</span> ${esc(c.es)}</button>`).join("")}
+      ${CITIES.filter(c => pool.some(p => p.c === c.id)).map(c => `<button class="chip" type="button" data-vcity="${c.id}" aria-pressed="${state.vcity === c.id}">${esc(c.es)}</button>`).join("")}
     </div>
     <div class="chips" role="toolbar" aria-label="Filtrar virales por tipo">
       <button class="chip" type="button" data-vcat="all" aria-pressed="${state.vcat === "all"}">Todo</button>
       ${cats.map(([k, l]) => `<button class="chip" type="button" data-vcat="${k}" aria-pressed="${state.vcat === k}">${esc(l)}</button>`).join("")}
     </div>
     ${shown.length ? `<div class="vgrid">${shown.map(p => `<button class="vcard" type="button" data-open="${p.id}">
-        ${p.ph ? `<img src="${esc(p.ph.file)}" alt="${esc(p.ph.alt || p.n)}" loading="lazy" decoding="async">` : `<span class="vnoimg" lang="zh">${esc(cityOf(p.c).sc)}</span>`}
-        <span class="vcity" lang="zh">${cityOf(p.c).sc}</span>
+        ${p.ph ? `<img src="${esc(p.ph.file)}" alt="${esc(p.ph.alt || p.n)}" loading="lazy" decoding="async">` : `<span class="vnoimg">${cityCode(cityOf(p.c))}</span>`}
+        <span class="vcity">${cityCode(cityOf(p.c))}</span>
         <span class="vbody"><b class="vtitle">${esc(p.n)}</b><span class="zh" lang="${langOf(p.z)}">${esc(p.z)}</span>${p.v ? `<span class="vwhy">${esc(p.v)}</span>` : ""}</span>
       </button>`).join("")}</div>` : `<p class="empty">Nada viral con este filtro.</p>`}
     <p class="fine">Lo viral sale de guías y blogs que citan TikTok, Douyin, Xiaohongshu o Instagram. Toca una tarjeta para ver imperdibles, precios y cómo llegar.</p>`;
@@ -420,7 +421,7 @@ function transfersHTML(){
         ${tr.note ? `<p class="tip">${esc(tr.note)}</p>` : ""}
         ${tr.ph ? `<span class="credit">Foto: ${creditHTML(tr.ph)}</span>` : ""}
       </div>
-      <button class="go" type="button" data-transfer="${esc(tr.id)}" lang="zh" aria-label="Mostrar ${esc(tr.n)} al chofer">去</button>
+      <button class="go" type="button" data-transfer="${esc(tr.id)}" aria-label="Mostrar ${esc(tr.n)} al chofer">Ir</button>
     </div>`).join("")}</div>`;
 }
 
@@ -431,7 +432,7 @@ function hotelsEditorHTML(){
     const h = H[c.id] || {};
     const has = h.z || h.a;
     return `<details class="hotel" id="hotel-${c.id}">
-      <summary><span class="sc" lang="zh">${c.sc}</span><b>${esc(c.es)}</b><span class="hs" id="hsum-${c.id}">${has ? esc(h.n || h.z) : "Sin capturar"}</span></summary>
+      <summary><b>${esc(c.es)}</b><span class="hs" id="hsum-${c.id}">${has ? esc(h.n || h.z) : "Sin capturar"}</span></summary>
       <div class="hform">
         <label for="h-${c.id}-n">Nombre del hotel</label>
         <input id="h-${c.id}-n" value="${esc(h.n || "")}" placeholder="Ej. Hotel Éclat" autocomplete="off">
@@ -490,7 +491,7 @@ function listItemHTML(it){
       ${it.zh ? `<div class="zh" lang="${langOf(it.zh)}">${esc(it.zh)}${it.addr ? `<span class="addr">${esc(it.addr)}</span>` : ""}</div>` : it.addr ? `<div class="zh" lang="${langOf(it.addr)}"><span class="addr">${esc(it.addr)}</span></div>` : ""}
       ${it.price ? `<div class="meta"><span>${esc(it.price)}</span></div>` : ""}
       ${it.b ? `<p>${esc(it.b)}</p>` : ""}
-      ${tel || gi >= 0 ? `<div class="row">${tel}${gi >= 0 ? `<button class="btn go-btn" type="button" data-gcard="${gi}"><span lang="zh">去</span>Mostrar al chofer</button>` : ""}</div>` : ""}
+      ${tel || gi >= 0 ? `<div class="row">${tel}${gi >= 0 ? `<button class="btn go-btn" type="button" data-gcard="${gi}">Ir · Mostrar al chofer</button>` : ""}</div>` : ""}
       ${it.s ? `<a class="src" href="${esc(it.s)}" target="_blank" rel="noopener">Fuente ↗</a>` : ""}
       ${it.ph ? `<span class="credit">Foto${it.ph.kind === "ilustrativa" ? " ilustrativa" : ""}: ${creditHTML(it.ph)}</span>` : ""}
     </div>
@@ -522,14 +523,13 @@ function renderMas(app){
     <div class="install" id="install" hidden></div>
     <div class="hub">
       <button class="hubtile feature" type="button" data-sub="gastos">
-        <span class="hz" lang="zh">账本</span>
         <span class="hub-txt"><b>Gastos del viaje</b><small>${gastos.length ? `${fmtMXN(spent)} MXN en ${gastos.length} ${gastos.length === 1 ? "gasto" : "gastos"}` : "Anota lo que gastas y se suma en pesos"}</small></span>
       </button>
       ${secs.map(s => {
-        const t = TOPICS[s.id] || {z: "指南", label: s.title, desc: ""};
-        return `<button class="hubtile" type="button" data-sub="${esc(s.id)}"><span class="hz" lang="zh">${t.z}</span><b>${esc(t.label)}</b>${t.desc ? `<small>${esc(t.desc)}</small>` : ""}</button>`;
+        const t = TOPICS[s.id] || {label: s.title, desc: ""};
+        return `<button class="hubtile" type="button" data-sub="${esc(s.id)}"><b>${esc(t.label)}</b>${t.desc ? `<small>${esc(t.desc)}</small>` : ""}</button>`;
       }).join("")}
-      <button class="hubtile" type="button" data-sub="all"><span class="hz" lang="zh">全部</span><b>Guía completa</b><small>Todos los temas en una página</small></button>
+      <button class="hubtile" type="button" data-sub="all"><b>Guía completa</b><small>Todos los temas en una página</small></button>
     </div>
 
     <section class="offline">
@@ -568,7 +568,7 @@ function renderGuide(app){
     </div>` : "";
   app.innerHTML = `
     <div class="chips topicbar" id="topicbar" role="toolbar" aria-label="Temas">
-      ${secs.map(s => `<button class="chip" type="button" data-sub="${esc(s.id)}" aria-pressed="${state.sub === s.id}"><span lang="zh">${(TOPICS[s.id] || {}).z || ""}</span> ${esc((TOPICS[s.id] || {}).label || s.title)}</button>`).join("")}
+      ${secs.map(s => `<button class="chip" type="button" data-sub="${esc(s.id)}" aria-pressed="${state.sub === s.id}">${esc((TOPICS[s.id] || {}).label || s.title)}</button>`).join("")}
       <button class="chip" type="button" data-sub="all" aria-pressed="${state.sub === "all"}">Todo</button>
     </div>
     ${conv}
@@ -605,7 +605,7 @@ function barsHTML(title, rows, total){
   <div class="bars">${rows.map(r => {
     const pct = total ? Math.round(r.mxn / total * 100) : 0;
     return `<div class="bar-row" tabindex="0" data-tip-v="${esc(fmtMXN(r.mxn))} MXN · ${esc(fmtCNY(r.mxn / RATE_G))}" data-tip-l="${esc(r.l)} · ${r.n} ${r.n === 1 ? "gasto" : "gastos"} · ${pct}%">
-      <span class="bar-label">${r.sc ? `<span lang="zh">${r.sc}</span> ` : ""}${esc(r.l)}</span>
+      <span class="bar-label">${esc(r.l)}</span>
       <span class="bar-track"><span class="bar-fill" style="width:${Math.max(2, r.mxn / max * 100).toFixed(1)}%"></span></span>
       <span class="bar-val">${esc(fmtMXN(r.mxn))}</span>
     </div>`;
@@ -673,7 +673,7 @@ function renderGastos(app){
 
     <div class="chips gfilter" role="toolbar" aria-label="Filtrar gastos por ciudad">
       <button class="chip" type="button" data-gcity="all" aria-pressed="${state.gcity === "all"}">Todo el viaje</button>
-      ${CITIES.map(c => `<button class="chip" type="button" data-gcity="${c.id}" aria-pressed="${state.gcity === c.id}"><span lang="zh">${c.sc}</span> ${esc(c.es)}</button>`).join("")}
+      ${CITIES.map(c => `<button class="chip" type="button" data-gcity="${c.id}" aria-pressed="${state.gcity === c.id}">${esc(c.es)}</button>`).join("")}
     </div>
 
     <div class="hero">
@@ -702,7 +702,7 @@ function renderGastos(app){
             return `<div class="grow">
               <div class="gbody">
                 <h4>${esc(g.note || labelOf(CAT_G, g.cat))}</h4>
-                <span class="meta">${gc ? `<span lang="zh">${gc.sc}</span>` : ""}<span>${esc(labelOf(CAT_G, g.cat))}</span><span>${esc(labelOf(PAY, g.pay))}</span></span>
+                <span class="meta">${gc ? `<span>${esc(gc.es)}</span>` : ""}<span>${esc(labelOf(CAT_G, g.cat))}</span><span>${esc(labelOf(PAY, g.pay))}</span></span>
               </div>
               <div class="gamt"><b>${esc(fmtMXN(toMXN(g)))}</b><small>${esc(fmtOrig(g))}</small></div>
               <button class="btn gdel${confirm ? " confirm" : ""}" type="button" data-gdel="${esc(g.id)}" aria-label="${confirm ? "Confirmar borrar gasto" : "Borrar gasto"}">${confirm ? "¿Borrar?" : "×"}</button>
