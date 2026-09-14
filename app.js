@@ -396,19 +396,21 @@ function openPlace(id){
 /* ---------- más: hub, guía, hoteles, traslados ---------- */
 
 const TOPICS = {
-  "traslados": {z: "交通", label: "Traslados", desc: "Estaciones y aeropuertos en chino"},
-  "hoteles": {z: "酒店", label: "Mis hoteles", desc: "Captura tus hoteles para el chofer"},
-  "frases-emergencia": {z: "急救", label: "Emergencias", desc: "110, 120 y frases"},
-  "emergencias": {z: "使馆", label: "Embajadas y hospitales", desc: "México, España y clínicas"},
-  "restaurante": {z: "点菜", label: "Restaurante", desc: "Sin picante, alergias, la cuenta"},
-  "regateo": {z: "砍价", label: "Regateo", desc: "Calculadora y frases"},
-  "replicas": {z: "高仿", label: "Réplicas", desc: "Calidades y precios reales"},
-  "que-comprar": {z: "购物", label: "Qué comprar", desc: "Y qué no, en ropa y tecnología"},
-  "marcas": {z: "品牌", label: "Marcas chinas", desc: "Deportivas, moda y outdoor"},
-  "apps": {z: "应用", label: "Apps", desc: "Qué bajar antes de volar"},
-  "esim": {z: "上网", label: "eSIM y VPN", desc: "Internet sin bloqueos"},
-  "dinero": {z: "钱", label: "Dinero", desc: "Pagos y devolución de impuestos"}
+  "traslados": {icon: "train", label: "Traslados", desc: "Estaciones y aeropuertos en chino"},
+  "hoteles": {icon: "door", label: "Mis hoteles", desc: "Captura tus hoteles para el chofer"},
+  "frases-emergencia": {icon: "cross", label: "Emergencias", desc: "110, 120 y frases"},
+  "emergencias": {icon: "bank", label: "Embajadas y hospitales", desc: "México, España y clínicas"},
+  "restaurante": {icon: "fork", label: "Restaurante", desc: "Sin picante, alergias, la cuenta"},
+  "regateo": {icon: "percent", label: "Regateo", desc: "Calculadora y frases"},
+  "replicas": {icon: "copy", label: "Réplicas", desc: "Calidades y precios reales"},
+  "que-comprar": {icon: "bag", label: "Qué comprar", desc: "Y qué no, en ropa y tecnología"},
+  "marcas": {icon: "star", label: "Marcas chinas", desc: "Deportivas, moda y outdoor"},
+  "apps": {icon: "phone", label: "Apps", desc: "Qué bajar antes de volar"},
+  "esim": {icon: "signal", label: "eSIM y VPN", desc: "Internet sin bloqueos"},
+  "dinero": {icon: "coin", label: "Dinero", desc: "Pagos y devolución de impuestos"}
 };
+
+const hubIcon = name => `<span class="hub-ico"><svg viewBox="0 0 24 24"><use href="#i-${name}"/></svg></span>`;
 
 function transfersHTML(){
   return `<div class="glist">${Object.values(TRIP.transfers).map(tr => `
@@ -523,13 +525,14 @@ function renderMas(app){
     <div class="install" id="install" hidden></div>
     <div class="hub">
       <button class="hubtile feature" type="button" data-sub="gastos">
+        ${hubIcon("receipt")}
         <span class="hub-txt"><b>Gastos del viaje</b><small>${gastos.length ? `${fmtMXN(spent)} MXN en ${gastos.length} ${gastos.length === 1 ? "gasto" : "gastos"}` : "Anota lo que gastas y se suma en pesos"}</small></span>
       </button>
       ${secs.map(s => {
-        const t = TOPICS[s.id] || {label: s.title, desc: ""};
-        return `<button class="hubtile" type="button" data-sub="${esc(s.id)}"><b>${esc(t.label)}</b>${t.desc ? `<small>${esc(t.desc)}</small>` : ""}</button>`;
+        const t = TOPICS[s.id] || {icon: "list", label: s.title, desc: ""};
+        return `<button class="hubtile" type="button" data-sub="${esc(s.id)}">${hubIcon(t.icon)}<b>${esc(t.label)}</b>${t.desc ? `<small>${esc(t.desc)}</small>` : ""}</button>`;
       }).join("")}
-      <button class="hubtile" type="button" data-sub="all"><b>Guía completa</b><small>Todos los temas en una página</small></button>
+      <button class="hubtile" type="button" data-sub="all">${hubIcon("list")}<b>Guía completa</b><small>Todos los temas en una página</small></button>
     </div>
 
     <section class="offline">
