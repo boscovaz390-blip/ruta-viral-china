@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Ruta Viral China</title>
-<meta name="description" content="Réplicas, panaderías virales, restaurantes, tecnología y noches en Beijing, Xi'an, Chengdu, Lijiang y Shanghái. Funciona sin internet.">
+<meta name="description" content="Tu viaje día a día, lo más viral, réplicas, panaderías, restaurantes, tecnología y gastos en Beijing, Xi'an, Chengdu, Lijiang, Shanghái y Seúl. Funciona sin internet.">
 <meta name="robots" content="noindex">
 <meta name="theme-color" content="#EFF2EE" media="(prefers-color-scheme: light)">
 <meta name="theme-color" content="#0D1311" media="(prefers-color-scheme: dark)">
@@ -20,46 +20,24 @@
 </head>
 <body>
 
-<header class="top">
-  <div class="wrap">
-    <div class="mast"><b>Ruta Viral China</b><span class="status" id="status" aria-live="polite"></span></div>
-    <ol class="route" id="route"></ol>
+<header class="appbar">
+  <div class="wrap appbar-in">
+    <button class="icon-btn" id="back" type="button" aria-label="Regresar a Más" hidden>‹</button>
+    <b class="appbar-title" id="title">Hoy</b>
+    <span class="status" id="status" aria-live="polite"></span>
+    <button class="hotel-btn" type="button" data-hotel="" aria-label="Mostrar mi hotel al chofer"><span lang="zh">酒店</span></button>
   </div>
 </header>
 
-<div class="wrap">
-  <div class="install" id="install" hidden></div>
-  <div class="search">
-    <label class="sr" for="q">Buscar lugares</label>
-    <input id="q" type="search" placeholder="Buscar en las 5 ciudades: pato, Pop Mart, 小笼包…" autocomplete="off" enterkeyhint="search">
-  </div>
-</div>
-
 <main class="wrap" id="app"></main>
 
-<footer class="wrap foot">
-  <section class="offline" id="offline">
-    <h2 class="lbl">Sin internet</h2>
-    <p id="offline-state">Revisando qué está guardado en este teléfono…</p>
-    <ol>
-      <li><b>iPhone:</b> abre el link en Safari → <b>Compartir</b> → <b>Agregar a inicio</b>. Ábrela desde el ícono 去 con Wi-Fi hasta que diga “Lista sin internet”.</li>
-      <li><b>Android:</b> en Chrome, menú ⋮ → <b>Instalar app</b>.</li>
-      <li>Pruébala en modo avión antes de volar y ábrela un par de veces en los días previos.</li>
-    </ol>
-  </section>
-
-  <h2 class="lbl">Para todo el viaje</h2>
-  <ul>
-    <li><b>Antes de volar:</b> eSIM con VPN (WhatsApp, Google e Instagram están bloqueados), Alipay con tu tarjeta ligada y Didi abierto desde Alipay. Casi nadie acepta tarjeta física.</li>
-    <li><b>Dianping (大众点评):</b> “在线取号” te forma en la fila en línea; “订座” reserva mesa. Úsalo para los lugares con filas de horas.</li>
-    <li><b>Reserva ya:</b> Da Dong en Beijing, la ópera Shufeng Yayun en Chengdu, Old Jesse y el cangrejo en Shanghái. Opcional: Everlasting Regret en Xi'an.</li>
-    <li><b>Réplicas:</b> pocas piezas por marca y de uso personal. Las aduanas de México y de la UE pueden decomisarlas.</li>
-    <li><b>El sello 去</b> abre el nombre y la dirección en chino a pantalla completa para enseñárselos al taxista o copiarlos a Didi.</li>
-  </ul>
-  <p class="fine">Investigado en septiembre de 2026 con fuentes de 2025–2026. “Sin verificar” significa que no se pudo confirmar abierto o con ese horario: revísalo en Dianping antes de ir. Precios aproximados en yuanes (¥). Fotos de Wikimedia Commons con licencia libre; las marcadas “Foto ilustrativa” muestran el platillo o la zona, no el local exacto.</p>
-</footer>
-
-<button class="fab" type="button" data-hotel="" aria-label="Mostrar mi hotel en chino al chofer"><span lang="zh">酒店</span><small>Mi hotel</small></button>
+<nav class="tabbar" aria-label="Secciones de la app">
+  <button class="tab" type="button" data-tab="ciudades"><span class="ti" lang="zh">城</span><span class="tlab">Ciudades</span></button>
+  <button class="tab" type="button" data-tab="buscar"><span class="ti" lang="zh">搜</span><span class="tlab">Buscar</span></button>
+  <button class="tab tab-hoy" type="button" data-tab="hoy"><span class="ti" lang="zh">今</span><span class="tlab">Hoy</span></button>
+  <button class="tab" type="button" data-tab="virales"><span class="ti" lang="zh">热</span><span class="tlab">Virales</span></button>
+  <button class="tab" type="button" data-tab="mas"><span class="ti" lang="zh">多</span><span class="tlab">Más</span></button>
+</nav>
 
 <dialog id="driver" aria-labelledby="dz">
   <div class="card">
