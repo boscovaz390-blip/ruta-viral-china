@@ -345,8 +345,6 @@ function renderHoy(app){
 
     ${spentDay.length ? `<div class="day-gastos"><span>Gastaste este día</span><b>${fmtMXN(sumBy(spentDay, toMXN))} MXN</b></div>` : ""}
 
-    ${diaryBoxHTML({date: d.date, cid: here.id})}
-
     <h2 class="lbl">Hora ahora</h2>
     ${clockHTML()}
 
@@ -435,7 +433,6 @@ function renderPlace(app){
     ${(p.gal || []).length ? `<h2 class="lbl">Más fotos</h2>${stripHTML(p.gal)}` : ""}
     ${dishes.length ? `<h2 class="lbl">Pide aquí</h2><div class="rail">${dishes.map(({d, i}) => dishCardHTML(d, p.c, i)).join("")}</div>` : ""}
     ${near.length ? `<h2 class="lbl">Cerca de aquí</h2><div class="near">${near.map(({q, d}) => nearRowHTML(q, d, dirTo(p.ll, q.ll))).join("")}</div>` : ""}
-    ${diaryBoxHTML({place: p.id, cid: p.c})}
     <div class="row quick">${p.r ? `<button class="btn primary" type="button" data-sub="reservas">Cómo reservar</button>` : ""}<button class="btn" type="button" data-pick-city="${p.c}">Más lugares en ${esc(cityOf(p.c).es)} →</button></div>
   </div>`;
 }
@@ -484,7 +481,6 @@ const TOPICS = {
   "tren-avion": {g: "viaje", icon: "train", label: "Tren y avión", desc: "Paso a paso en la estación"},
   "clima": {g: "viaje", icon: "sun", label: "Clima y ropa", desc: "Qué llevar en cada ciudad"},
   "checklist": {g: "viaje", icon: "check", label: "Checklist", desc: "Antes de volar y maleta"},
-  "diario": {g: "viaje", icon: "book", label: "Diario", desc: "Tus notas y fotos del viaje"},
   "platillos": {g: "comer", icon: "bowl", label: "Señala y pide", desc: "Platillos con foto para el mesero"},
   "frases": {g: "comer", icon: "speaker", label: "Frases con audio", desc: "Hotel, taxi, alergias y compras"},
   "restaurante": {g: "comer", icon: "fork", label: "Restaurante", desc: "Sin picante, alergias, la cuenta"},
@@ -554,7 +550,6 @@ const VIRTUAL = [
   {id: "ahora", title: "¿Qué hago ahora?", html: ahoraHTML},
   {id: "boletos", title: "Mis boletos", html: boletosHTML},
   {id: "reservas", title: "Reservaciones", html: reservasHTML, when: () => P.some(p => p.r)},
-  {id: "diario", title: "Diario del viaje", html: diarioHTML},
   {id: "viajeros", title: "Viajeros", html: viajerosHTML},
   {id: "tren-avion", title: "Tren y avión paso a paso", html: () => { const L = GUIDE.logi || {}; return stepsHTML(L.rail) + stepsHTML(L.air_dom) + stepsHTML(L.air_intl); }, when: () => GUIDE.logi && GUIDE.logi.rail},
   {id: "clima", title: "Clima y qué ropa llevar", html: climaHTML, when: () => GUIDE.logi && (GUIDE.logi.climate || []).length},
@@ -1425,125 +1420,6 @@ function ahoraHTML(){
     ${also.length ? `<h3 class="gsub">También abierto</h3><div class="near">${also.map(row).join("")}</div>` : ""}`;
 }
 
-/* ---------- diario: notas y fotos guardadas en este teléfono (IndexedDB) ---------- */
-
-const DB = {
-  open(){
-    return this.p || (this.p = new Promise((res, rej) => {
-      const r = indexedDB.open("rvc", 1);
-      r.onupgradeneeded = () => r.result.createObjectStore("diario", {keyPath: "id"});
-      r.onsuccess = () => res(r.result);
-      r.onerror = () => rej(r.error);
-    }));
-  },
-  async run(mode, fn){
-    const db = await this.open();
-    return new Promise((res, rej) => {
-      const tx = db.transaction("diario", mode);
-      const q = fn(tx.objectStore("diario"));
-      tx.oncomplete = () => res(q && q.result);
-      tx.onerror = () => rej(tx.error);
-    });
-  },
-  all(){ return this.run("readonly", s => s.getAll()); },
-  put(v){ return this.run("readwrite", s => s.put(v)); },
-  del(id){ return this.run("readwrite", s => s.delete(id)); }
-};
-let DIARY_URLS = [];
-
-async function shrinkPhoto(file){
-  const url = URL.createObjectURL(file);
-  try{
-    const img = await new Promise((res, rej) => { const i = new Image(); i.onload = () => res(i); i.onerror = rej; i.src = url; });
-    const k = Math.min(1, 1400 / Math.max(img.naturalWidth, img.naturalHeight));
-    const c = document.createElement("canvas");
-    c.width = Math.round(img.naturalWidth * k); c.height = Math.round(img.naturalHeight * k);
-    c.getContext("2d").drawImage(img, 0, 0, c.width, c.height);
-    return await new Promise(res => c.toBlob(b => res(b || file), "image/jpeg", 0.72));
-  } finally {
-    URL.revokeObjectURL(url);
-  }
-}
-
-function diaryBoxHTML(scope, all){
-  const key = scope.place ? "p-" + scope.place : "d-" + (scope.date || "hoy");
-  return `<section class="diary${all ? " diary-all" : ""}" data-ddate="${esc(scope.date || "")}" data-dplace="${esc(scope.place || "")}" data-dcity="${esc(scope.cid || "")}">
-    <label class="gsub" for="dt-${esc(key)}">${scope.place ? "Mis notas aquí" : all ? "Nueva nota" : "Tu diario de este día"}</label>
-    <textarea id="dt-${esc(key)}" rows="3" placeholder="${scope.place ? "Qué pediste, qué te gustó, cuánto pagaste…" : "Qué hiciste, lo mejor del día, lo que no repetirías…"}"></textarea>
-    <div class="row"><label class="btn file-btn">Agregar fotos<input type="file" accept="image/*" multiple data-diary-files></label><button class="btn primary" type="button" data-diary-save>Guardar</button><span class="dpick" aria-live="polite"></span></div>
-    <div class="diary-list"><p class="fine">Cargando…</p></div>
-  </section>`;
-}
-
-function diaryEntryHTML(e){
-  const p = e.place && byId[e.place];
-  const urls = (e.photos || []).map(b => { const u = URL.createObjectURL(b); DIARY_URLS.push(u); return u; });
-  return `<article class="dentry">
-    <div class="dentry-h"><span>${esc(dayShort(e.date))}${p ? ` · <button class="linkish" type="button" data-open="${p.id}">${esc(p.n)}</button>` : e.cid && cityOf(e.cid) ? ` · ${esc(cityOf(e.cid).es)}` : ""}</span>
-      <span class="dentry-act"><button class="linkish" type="button" data-diary-share="${esc(e.id)}">Compartir</button><button class="linkish" type="button" data-diary-del="${esc(e.id)}">Borrar</button></span></div>
-    ${e.text ? `<p>${esc(e.text)}</p>` : ""}
-    ${urls.length ? `<div class="dphotos">${urls.map(u => `<img src="${u}" alt="Foto del diario">`).join("")}</div>` : ""}
-  </article>`;
-}
-
-async function hydrateDiary(){
-  const boxes = [...document.querySelectorAll(".diary")];
-  if (!boxes.length) return;
-  DIARY_URLS.forEach(u => URL.revokeObjectURL(u));
-  DIARY_URLS = [];
-  let all = [];
-  try{ all = "indexedDB" in window ? await DB.all() : null; }catch(e){ all = null; }
-  boxes.forEach(b => {
-    const list = b.querySelector(".diary-list");
-    if (!list) return;
-    if (!all){ list.innerHTML = `<p class="fine">Este navegador no deja guardar el diario.</p>`; return; }
-    const mine = [...all].sort((x, y) => y.ts - x.ts).filter(e => b.classList.contains("diary-all") || (b.dataset.dplace ? e.place === b.dataset.dplace : e.date === b.dataset.ddate));
-    list.innerHTML = mine.length ? mine.map(diaryEntryHTML).join("")
-      : `<p class="fine">${b.classList.contains("diary-all") ? "Todavía no hay notas. Agrégalas desde Hoy o desde cualquier lugar." : "Todavía no hay notas aquí."}</p>`;
-  });
-}
-
-async function saveDiary(btn){
-  const box = btn.closest(".diary");
-  const ta = box.querySelector("textarea"), fi = box.querySelector("[data-diary-files]"), msg = box.querySelector(".dpick");
-  const text = ta.value.trim(), files = [...(fi.files || [])];
-  if (!text && !files.length){ msg.textContent = "Escribe algo o agrega una foto."; return; }
-  btn.disabled = true;
-  msg.textContent = files.length ? "Guardando fotos…" : "Guardando…";
-  try{
-    const photos = [];
-    for (const f of files.slice(0, 12)) photos.push(await shrinkPhoto(f));
-    await DB.put({id: uid(), ts: Date.now(), date: box.dataset.ddate || todayISO(), cid: box.dataset.dcity || "", place: box.dataset.dplace || null, text, photos});
-    if (navigator.storage && navigator.storage.persist) navigator.storage.persist().catch(() => {});
-    ta.value = ""; fi.value = "";
-    msg.textContent = "Guardado";
-    hydrateDiary();
-  }catch(e){
-    msg.textContent = e && e.name === "QuotaExceededError" ? "No se pudo guardar: el teléfono no tiene espacio." : "No se pudo guardar, intenta de nuevo.";
-  }finally{
-    btn.disabled = false;
-  }
-}
-
-async function shareDiary(id){
-  const e = ((await DB.all()) || []).find(x => x.id === id);
-  if (!e) return;
-  const p = e.place && byId[e.place];
-  const text = [dayShort(e.date) + (p ? " · " + p.n : ""), e.text].filter(Boolean).join("\n");
-  const files = (e.photos || []).map((b, i) => new File([b], `ruta-viral-${i + 1}.jpg`, {type: "image/jpeg"}));
-  try{
-    if (files.length && navigator.canShare && navigator.canShare({files})) await navigator.share({text, files});
-    else if (navigator.share) await navigator.share({text});
-    else await navigator.clipboard.writeText(text);
-  }catch(err){}
-}
-
-// a function declaration (not a const) because VIRTUAL, near the top, references it at load time
-function diarioHTML(){
-  return `<p class="gp">Tus notas y fotos del viaje, guardadas solo en este teléfono. Si borras la app de la pantalla de inicio se borran: compártelas a WhatsApp o a Fotos para respaldarlas.</p>
-  ${diaryBoxHTML({date: todayISO(), cid: currentHotelCity()}, true)}`;
-}
-
 /* ---------- reservaciones ---------- */
 
 function reservasHTML(){
@@ -1865,7 +1741,6 @@ function render(){
   tip.hidden = true;
   // microtasks run right after the synchronous render below, without depending on animation frames
   queueMicrotask(tickClock);
-  queueMicrotask(hydrateDiary);
   document.querySelectorAll(".tab").forEach(t => {
     if (t.dataset.tab === state.tab) t.setAttribute("aria-current", "page"); else t.removeAttribute("aria-current");
   });
@@ -1914,11 +1789,6 @@ document.addEventListener("input", e => {
 });
 
 document.addEventListener("change", e => {
-  if (e.target.matches && e.target.matches("[data-diary-files]")){
-    const n = e.target.files.length, s = e.target.closest(".diary").querySelector(".dpick");
-    if (s) s.textContent = n ? `${n} ${n === 1 ? "foto lista" : "fotos listas"}` : "";
-    return;
-  }
   if (e.target.id === "g-budget"){
     const v = parseFloat(e.target.value);
     store.set("rvc-budget", isFinite(v) && v > 0 ? Math.round(v) : 0);
@@ -1999,13 +1869,6 @@ document.addEventListener("click", e => {
   if ((x = el("[data-routen]"))){ state.routeN = Number(x.dataset.routen); render(); return; }
   if ((x = el("[data-amode]"))){ state.amode = x.dataset.amode; render(); return; }
   if ((x = el("[data-acity]"))){ state.acity = x.dataset.acity; render(); return; }
-  if ((x = el("[data-diary-save]"))){ saveDiary(x); return; }
-  if ((x = el("[data-diary-share]"))){ shareDiary(x.dataset.diaryShare); return; }
-  if ((x = el("[data-diary-del]"))){
-    if (x.dataset.confirm) DB.del(x.dataset.diaryDel).then(hydrateDiary);
-    else { x.dataset.confirm = "1"; x.textContent = "¿Borrar?"; }
-    return;
-  }
   if ((x = el("[data-booked]"))){
     const all = store.get("rvc-booked", {});
     if (all[x.dataset.booked]) delete all[x.dataset.booked]; else all[x.dataset.booked] = 1;

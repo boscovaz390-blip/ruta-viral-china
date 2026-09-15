@@ -606,23 +606,6 @@ p.tip b{font-weight:800;color:var(--k)}
 .state-chip.open{background:var(--mint-soft);color:var(--mint)}
 .state-chip.closed{background:var(--red-soft);color:var(--red-2)}
 
-/* diario */
-.diary{display:grid;gap:10px;margin-top:22px;padding:14px;background:var(--surface);border-radius:22px;box-shadow:var(--e1)}
-.diary .gsub{margin:0}
-.diary textarea{width:100%;min-height:74px;font:inherit;font-size:16px;padding:10px 12px;border:0;border-radius:14px;background:var(--surface2);color:var(--ink);resize:vertical}
-.diary .row{align-items:center}
-.file-btn{position:relative;overflow:hidden}
-.file-btn input{position:absolute;inset:0;opacity:0;cursor:pointer}
-.dpick{font-size:12.5px;font-weight:700;color:var(--muted)}
-.diary-list{display:grid;gap:10px}
-.dentry{display:grid;gap:6px;padding-top:10px;border-top:1.5px dashed var(--line)}
-.dentry:first-child{padding-top:0;border-top:0}
-.dentry-h{display:flex;justify-content:space-between;align-items:baseline;gap:8px;font-size:12.5px;font-weight:700;color:var(--muted)}
-.dentry-act{display:flex;gap:12px;flex:0 0 auto}
-.dentry p{margin:0;white-space:pre-wrap}
-.dphotos{display:flex;gap:8px;overflow-x:auto;scrollbar-width:none}
-.dphotos img{flex:0 0 auto;width:112px;height:112px;object-fit:cover;border-radius:14px}
-
 /* cuentas y reservas */
 .bal{display:grid;gap:8px}
 .bal-row{display:grid;grid-template-columns:44px minmax(0,1fr) auto;gap:10px;align-items:center;padding:10px 12px;background:var(--surface);border-radius:18px;box-shadow:var(--e1)}
