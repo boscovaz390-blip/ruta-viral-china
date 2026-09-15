@@ -118,11 +118,28 @@ const thumbHTML = (ph, cls, alt) => ph
   ? `<img class="${cls}" src="${esc(ph.file)}" alt="${esc(ph.alt || alt || "")}" loading="lazy" decoding="async">`
   : "";
 
+/* big photo with the title laid over it (Hoy and each city) */
+function heroHTML(ph, {kick, title, label, code}){
+  return `<section class="hero-card${ph ? "" : " no-ph"}">
+    ${ph ? `<img src="${esc(ph.file)}" alt="${esc(ph.alt || label || "")}" decoding="async">` : `<span class="cover-code" aria-hidden="true">${esc(code || "")}</span>`}
+    ${ph && ph.kind === "ilustrativa" ? `<span class="illu">Foto ilustrativa</span>` : ""}
+    <div class="hero-txt">${kick ? `<span class="kick">${esc(kick)}</span>` : ""}<h1>${esc(title)}</h1></div>
+  </section>
+  ${ph ? `<p class="credit hero-credit">${label ? esc(label) + " · " : ""}Foto: ${creditHTML(ph)}</p>` : ""}`;
+}
+
 /* ---------- places ---------- */
 
 function mustHTML(p){
   const must = Array.isArray(p.m) ? p.m : p.m ? [p.m] : [];
   return must.length ? `<div class="must"><b>Imperdibles</b><ul>${must.map(x => `<li>${esc(x)}</li>`).join("")}</ul></div>` : "";
+}
+
+const coverFill = p => `<span class="cover-code" aria-hidden="true">${cityCode(cityOf(p.c))}</span>`;
+
+function favHTML(p){
+  const on = favs.has(p.id);
+  return `<button class="fav" type="button" data-fav="${p.id}" aria-pressed="${on}" aria-label="${on ? "Quitar de guardados" : "Guardar"}">${on ? "★" : "☆"}</button>`;
 }
 
 function entryHTML(p, withCity){
@@ -134,11 +151,18 @@ function entryHTML(p, withCity){
   if (p.v) tags.push(`<span class="tag viral">${esc(p.v)}</span>`);
   if (p.u) tags.push(`<span class="tag unv">Sin verificar</span>`);
   const meta = [p.p, p.h].filter(Boolean).map(x => `<span>${esc(x)}</span>`).join("");
-  const on = favs.has(p.id);
-  return `<article class="entry${p.ph ? " has-ph" : ""}" id="e-${esc(p.id)}">
-    ${figHTML(p.ph, "ph")}
-    <div class="main">
+  const foot = [
+    p.s ? `<a class="src" href="${esc(p.s)}" target="_blank" rel="noopener">Fuente ↗</a>` : "",
+    p.ph ? `Foto${p.ph.kind === "ilustrativa" ? " ilustrativa" : ""}: ${creditHTML(p.ph)}` : ""
+  ].filter(Boolean).join(" · ");
+  return `<article class="entry k-${esc(p.k)}${p.ph ? " has-ph" : " no-ph"}" id="e-${esc(p.id)}">
+    <div class="cover">
+      ${p.ph ? `<img src="${esc(p.ph.file)}" alt="${esc(p.ph.alt || p.n)}" loading="lazy" decoding="async">` : coverFill(p)}
       <span class="cat">${esc(CATS[p.k])}</span>
+      ${p.ph && p.ph.kind === "ilustrativa" ? `<span class="illu">Foto ilustrativa</span>` : ""}
+      ${favHTML(p)}
+    </div>
+    <div class="main">
       <h3>${esc(p.n)}</h3>
       <div class="zh" lang="${langOf(p.z)}">${esc(p.z)}${p.a ? `<span class="addr">${esc(p.a)}</span>` : ""}</div>
       ${meta ? `<div class="meta">${meta}</div>` : ""}
@@ -147,31 +171,22 @@ function entryHTML(p, withCity){
       ${mustHTML(p)}
       ${p.pp ? `<figure class="prod"><img src="${esc(p.pp.file)}" alt="${esc(p.pp.alt || p.pp.sight || "")}" loading="lazy" decoding="async"><figcaption>${p.pp.sight ? `<b>${esc(p.pp.sight)}</b>` : ""}Foto${p.pp.kind === "ilustrativa" ? " ilustrativa" : ""}: ${creditHTML(p.pp)}</figcaption></figure>` : ""}
       ${p.t ? `<p class="tip"><b>Tip:</b> ${esc(p.t)}</p>` : ""}
-      ${p.s ? `<a class="src" href="${esc(p.s)}" target="_blank" rel="noopener">Fuente ↗</a>` : ""}
-    </div>
-    <div class="side">
-      <button class="go" type="button" data-go="${p.id}" aria-label="Mostrar ${esc(p.n)} al chofer">Ir</button>
-      <small>chofer</small>
-      <button class="fav" type="button" data-fav="${p.id}" aria-pressed="${on}" aria-label="${on ? "Quitar de guardados" : "Guardar"}">${on ? "★" : "☆"}</button>
+      <button class="go go-wide" type="button" data-go="${p.id}" aria-label="Mostrar ${esc(p.n)} al chofer">Ir <small>· mostrar al chofer</small></button>
+      ${foot ? `<p class="credit">${foot}</p>` : ""}
     </div>
   </article>`;
 }
 
 function recHTML(p){
-  const on = favs.has(p.id);
   const img = p.ph || p.pp;
-  return `<article class="rec${img ? "" : " no-ph"}">
-    ${img ? `<img src="${esc(img.file)}" alt="${esc(img.alt || p.n)}" loading="lazy" decoding="async">` : ""}
-    <button class="gbody rec-open" type="button" data-open="${p.id}">
-      <span class="cat">${esc(CATS[p.k])}${p.ig ? " · viral" : ""}</span>
-      <b class="rec-title">${esc(p.n)}</b>
-      <span class="zh" lang="${langOf(p.z)}">${esc(p.z)}</span>
-      ${p.p ? `<span class="meta"><span>${esc(p.p)}</span></span>` : ""}
+  return `<article class="rcard k-${esc(p.k)}">
+    <button class="rc-open" type="button" data-open="${p.id}">
+      ${img ? `<img src="${esc(img.file)}" alt="${esc(img.alt || p.n)}" loading="lazy" decoding="async">` : coverFill(p)}
+      <span class="cat">${esc(CATS[p.k])}</span>
+      <span class="rc-txt"><b class="rec-title">${esc(p.n)}</b><span class="zh" lang="${langOf(p.z)}">${esc(p.z)}</span>${p.p ? `<span class="rc-price">${esc(p.p)}</span>` : ""}</span>
     </button>
-    <div class="side">
-      <button class="go" type="button" data-go="${p.id}" aria-label="Mostrar ${esc(p.n)} al chofer">Ir</button>
-      <button class="fav" type="button" data-fav="${p.id}" aria-pressed="${on}" aria-label="${on ? "Quitar de guardados" : "Guardar"}">${on ? "★" : "☆"}</button>
-    </div>
+    ${favHTML(p)}
+    <button class="go" type="button" data-go="${p.id}" aria-label="Mostrar ${esc(p.n)} al chofer">Ir</button>
   </article>`;
 }
 
@@ -194,15 +209,7 @@ function renderCity(app){
       </button>`).join("")}
     </div>
 
-    <section class="city-head">
-      <p class="city-sc" aria-hidden="true">${cityCode(c)}</p>
-      <div class="city-meta">
-        <span class="dt">${esc(c.dates)}</span>
-        <h1>${esc(c.es)}</h1>
-        <p>${all.length} lugares</p>
-      </div>
-    </section>
-    ${banner ? figHTML(banner.ph, "banner", banner.n) : ""}
+    ${heroHTML(banner && banner.ph, {kick: `${c.dates} · ${all.length} lugares`, title: c.es, label: banner && banner.n, code: cityCode(c)})}
     <p class="intro">${esc(c.intro)}</p>
 
     ${(c.slots || []).length ? `<h2 class="lbl">Tus ratos libres</h2>
@@ -252,7 +259,7 @@ function renderResults(){
     box.innerHTML = `
       <h2 class="lbl">Prueba con</h2>
       <div class="suggest">${SUGGEST.map(s => `<button class="chip" type="button" data-suggest="${esc(s)}">${esc(s)}</button>`).join("")}</div>
-      ${saved.length ? `<h2 class="lbl">Tus guardados · ${saved.length}</h2><div class="recs">${saved.map(recHTML).join("")}</div>`
+      ${saved.length ? `<h2 class="lbl">Tus guardados · ${saved.length}</h2><div class="rail">${saved.map(recHTML).join("")}</div>`
         : `<p class="empty">Toca ☆ en cualquier lugar para tenerlo aquí a la mano.</p>`}`;
     return;
   }
@@ -316,15 +323,8 @@ function renderHoy(app){
       </button>`).join("")}
     </div>
 
-    <section class="city-head day-head">
-      <p class="city-sc" aria-hidden="true">${cityCode(c)}</p>
-      <div class="city-meta">
-        <span class="dt">${to ? `${esc(c.es)} → ${esc(to.es)}` : esc(c.es)}</span>
-        <h1>${esc(d.title)}</h1>
-      </div>
-    </section>
-
-    ${photos.length ? figHTML(photos[0], "banner day-hero", photos[0].sight) + (photos.length > 1 ? stripHTML(photos.slice(1)) : "") : ""}
+    ${heroHTML(photos[0], {kick: to ? `${c.es} → ${to.es}` : c.es, title: d.title, label: photos[0] && photos[0].sight, code: cityCode(c)})}
+    ${photos.length > 1 ? stripHTML(photos.slice(1)) : ""}
 
     <h2 class="lbl">Tu día</h2>
     <ol class="tl day-tl">${d.items.map(it => `<li><span class="tm">${esc(it.time || "")}</span><span>${esc(it.text)}</span></li>`).join("")}</ol>
@@ -332,8 +332,8 @@ function renderHoy(app){
 
     ${slots.length ? `<h2 class="lbl">Tu rato libre</h2>${slots.map(s => `<p class="gp"><span class="tm">${esc(s[1])}</span> ${esc(s[2])}</p>`).join("")}` : ""}
 
-    ${recs.length ? `<h2 class="lbl">Recomendado para este día · ${recs.length}</h2><div class="recs">${recs.map(recHTML).join("")}</div>` : ""}
-    ${saved.length ? `<h2 class="lbl">Tus guardados en ${esc(cityIds.map(id => cityOf(id).es).join(" y "))}</h2><div class="recs">${saved.map(recHTML).join("")}</div>` : ""}
+    ${recs.length ? `<h2 class="lbl">Recomendado para este día · ${recs.length}</h2><div class="rail">${recs.map(recHTML).join("")}</div>` : ""}
+    ${saved.length ? `<h2 class="lbl">Tus guardados en ${esc(cityIds.map(id => cityOf(id).es).join(" y "))}</h2><div class="rail">${saved.map(recHTML).join("")}</div>` : ""}
 
     ${spentDay.length ? `<div class="day-gastos"><span>Gastaste este día</span><b>${fmtMXN(sumBy(spentDay, toMXN))} MXN</b></div>` : ""}
 
@@ -362,13 +362,10 @@ function renderVirales(app){
   const shown = state.vcat === "all" ? scoped : scoped.filter(p => p.k === state.vcat);
   const cats = Object.entries(CATS).filter(([k]) => scoped.some(p => p.k === k));
   app.innerHTML = `
-    <section class="city-head">
-      <p class="city-sc" aria-hidden="true">VIRAL</p>
-      <div class="city-meta">
-        <span class="dt">TikTok · Instagram · Xiaohongshu</span>
-        <h1>Lo más viral</h1>
-        <p>${pool.length} lugares para la foto y la fila</p>
-      </div>
+    <section class="page-head">
+      <span class="sticker">TikTok · Instagram · Xiaohongshu</span>
+      <h1>Lo más <em>viral</em></h1>
+      <p>${pool.length} lugares para la foto y la fila</p>
     </section>
     <div class="chips" role="toolbar" aria-label="Filtrar virales por ciudad">
       <button class="chip" type="button" data-vcity="all" aria-pressed="${state.vcity === "all"}">Todas</button>
@@ -378,7 +375,7 @@ function renderVirales(app){
       <button class="chip" type="button" data-vcat="all" aria-pressed="${state.vcat === "all"}">Todo</button>
       ${cats.map(([k, l]) => `<button class="chip" type="button" data-vcat="${k}" aria-pressed="${state.vcat === k}">${esc(l)}</button>`).join("")}
     </div>
-    ${shown.length ? `<div class="vgrid">${shown.map(p => `<button class="vcard" type="button" data-open="${p.id}">
+    ${shown.length ? `<div class="vgrid">${shown.map(p => `<button class="vcard k-${esc(p.k)}" type="button" data-open="${p.id}">
         ${p.ph ? `<img src="${esc(p.ph.file)}" alt="${esc(p.ph.alt || p.n)}" loading="lazy" decoding="async">` : `<span class="vnoimg">${cityCode(cityOf(p.c))}</span>`}
         <span class="vcity">${cityCode(cityOf(p.c))}</span>
         <span class="vbody"><b class="vtitle">${esc(p.n)}</b><span class="zh" lang="${langOf(p.z)}">${esc(p.z)}</span>${p.v ? `<span class="vwhy">${esc(p.v)}</span>` : ""}</span>
@@ -778,7 +775,7 @@ async function copyTo(text, msgId, ok){
 
 /* chart tooltip: enhances the labeled bars, never the only way to read a value */
 const tip = document.createElement("div");
-tip.className = "tip";
+tip.className = "charttip";
 tip.setAttribute("role", "tooltip");
 tip.hidden = true;
 const tipV = document.createElement("b");
