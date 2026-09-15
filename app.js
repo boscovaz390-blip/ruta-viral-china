@@ -1064,14 +1064,17 @@ function originFor(cid){
   return saved ? {pt: saved, label: "tu hotel"} : null;
 }
 
-function mapSVG(cid, origin){
+function mapSVG(cid, origin, near){
   const pts = P.filter(p => p.c === cid && p.ll);
   if (pts.length < 2) return "";
   const mid = k => pts.map(p => p.ll[k]).sort((a, b) => a - b)[Math.floor(pts.length / 2)];
-  const center = [mid(0), mid(1)];
-  const core = pts.filter(p => distKm(center, p.ll) < 25);
-  const showMe = origin && distKm(center, origin.pt) < 25;
+  // "near" frames ~3 km around you; otherwise the city core, so a few far-off places don't squeeze the rest into one blob
+  const center = near && origin ? origin.pt : [mid(0), mid(1)];
+  const radius = near && origin ? 3 : 10;
+  const core = pts.filter(p => distKm(center, p.ll) < radius);
+  const showMe = origin && distKm(center, origin.pt) < radius;
   const cs = core.map(p => p.ll).concat(showMe ? [origin.pt] : []);
+  if (!cs.length) return "";
   const lats = cs.map(c => c[0]), lngs = cs.map(c => c[1]);
   const minLat = Math.min(...lats), maxLat = Math.max(...lats), minLng = Math.min(...lngs), maxLng = Math.max(...lngs);
   const kx = Math.cos((minLat + maxLat) / 2 * Math.PI / 180);
@@ -1092,7 +1095,7 @@ function mapSVG(cid, origin){
       <text x="${pad}" y="${H - 44}">${barKm < 1 ? barKm * 1000 + " m" : barKm + " km"}</text>
       ${pins}${me}
     </svg>
-    <figcaption>Mapa sin calles: cada punto es un lugar (el color es el tipo)${showMe ? " y el punto azul eres tú" : ""}. Toca un punto para abrirlo.${core.length < pts.length ? ` ${pts.length - core.length} lugares lejos del centro solo salen en la lista.` : ""}</figcaption>
+    <figcaption>Mapa sin calles: cada punto es un lugar (el color es el tipo)${showMe ? " y el punto azul eres tú" : ""}. Toca un punto para abrirlo.${core.length < pts.length ? ` ${pts.length - core.length} lugares quedan fuera de este mapa; salen en la lista.` : ""}</figcaption>
   </figure>`;
 }
 
@@ -1107,7 +1110,8 @@ function cercaHTML(){
     <div class="row"><button class="btn primary" type="button" data-locate>${HERE ? "Actualizar ubicación" : "Usar mi ubicación"}</button>${HERE && nearestCity([HERE.lat, HERE.lng]) ? `<button class="btn" type="button" data-save-here>Guardar aquí como mi hotel</button>` : ""}</div>
     <p class="saved-msg" id="locmsg" aria-live="polite">${origin ? `Distancias desde ${origin.label}.` : ""}</p>
     ${cityChips(ids, "data-mcity", cid)}
-    ${mapSVG(cid, origin)}
+    ${origin ? `<div class="chips" role="toolbar" aria-label="Zoom del mapa"><button class="chip" type="button" data-mapnear="1" aria-pressed="${state.mapnear !== false}">Cerca de ti · 3 km</button><button class="chip" type="button" data-mapnear="0" aria-pressed="${state.mapnear === false}">Toda la ciudad</button></div>` : ""}
+    ${mapSVG(cid, origin, origin && state.mapnear !== false)}
     <h3 class="gsub">${origin ? `Lo más cerca de ${origin.label}` : `Lugares en ${esc(cityOf(cid).es)}`}</h3>
     <div class="near">${rows.map(({p, d}) => nearRowHTML(p, d, d == null ? "" : dirTo(origin.pt, p.ll))).join("")}</div>`;
 }
@@ -1553,6 +1557,7 @@ document.addEventListener("click", e => {
     render(); return;
   }
   if ((x = el("[data-mcity]"))){ state.mcity = x.dataset.mcity; render(); return; }
+  if ((x = el("[data-mapnear]"))){ state.mapnear = x.dataset.mapnear === "1"; render(); return; }
   if ((x = el("[data-mapcity]"))){ state.mcity = x.dataset.mapcity; setView("mas", {sub: "cerca"}); return; }
   if ((x = el("[data-mzoom]"))){ state.mzoom = Math.min(4, Math.max(1, (state.mzoom || 1) + Number(x.dataset.mzoom))); render(); return; }
   if ((x = el("[data-tabla]"))){ state.tabla = x.dataset.tabla; render(); return; }
