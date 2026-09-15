@@ -60,6 +60,7 @@ function pickDay(){
 
 function parseHash(){
   const [a, b] = location.hash.slice(1).split("/");
+  if (a === "lugar" && byId[b]) return {tab: "ciudades", city: byId[b].c, sub: null, place: b};
   if (TABS.includes(a)) return {tab: a, city: a === "ciudades" && cityOf(b) ? b : null, sub: a === "mas" && b ? decodeURIComponent(b) : null};
   if (cityOf(a)) return {tab: "ciudades", city: a, sub: null};
   if (a === "guia") return {tab: "mas", city: null, sub: null};
@@ -71,12 +72,15 @@ const h0 = parseHash();
 const state = {
   tab: h0.tab, city: h0.city || defaultCity(), sub: h0.sub,
   cat: "all", q: "", gcity: "all", gdel: null, gprefill: null,
-  day: pickDay(), vcity: "all", vcat: "all"
+  day: pickDay(), vcity: "all", vcat: "all",
+  fcity: null, pset: null, mcity: null, mzoom: 1, tabla: null,
+  place: h0.place || null, placeY: 0
 };
 let SAY = [];
 let GCARDS = [];
 
 function setView(tab, opts = {}){
+  state.place = null;
   state.tab = tab;
   if (tab === "ciudades" && opts.city && cityOf(opts.city)){
     if (opts.city !== state.city) state.cat = "all";
@@ -217,15 +221,15 @@ function renderCity(app){
       ${c.slots.map(s => `<li class="slot"><span class="d">${esc(s[0])}<small>${esc(s[1])}</small></span><p>${esc(s[2])}</p></li>`).join("")}
     </ul>` : ""}
     ${(c.notes || []).length ? `<div class="notes"><ul>${c.notes.map(n => `<li>${esc(n)}</li>`).join("")}</ul></div>` : ""}
+    ${((GUIDE.food || {})[c.id] || []).length ? `<button class="hint food-hint" type="button" data-food="${c.id}"><b>Señala y pide en ${esc(c.es)}</b> · ${GUIDE.food[c.id].length} platillos con foto para enseñar al mesero →</button>` : ""}
+    ${all.some(p => p.ll) ? `<button class="hint map-hint" type="button" data-mapcity="${c.id}"><b>Mapa y cerca de mí</b> · qué te queda cerca con el GPS, sin internet →</button>` : ""}
 
     <h2 class="lbl">Lugares</h2>
     <div class="chips" role="toolbar" aria-label="Filtrar por tipo">
       ${chipDefs.map(([k, l]) => `<button class="chip" type="button" data-cat="${k}" aria-pressed="${state.cat === k}">${esc(l)}<span>${counts[k]}</span></button>`).join("")}
     </div>
-    <div class="list">
-      ${shown.length ? shown.map(p => entryHTML(p, false)).join("")
-        : `<p class="empty">${state.cat === "fav" ? "Todavía no guardas lugares en esta ciudad. Toca ☆ en los que quieras tener a la mano." : "Nada en esta categoría."}</p>`}
-    </div>`;
+    ${shown.length ? `<div class="vgrid">${shown.map(p => vcardHTML(p, false)).join("")}</div>`
+      : `<p class="empty">${state.cat === "fav" ? "Todavía no guardas lugares en esta ciudad. Toca ☆ en los que quieras tener a la mano." : "Nada en esta categoría."}</p>`}`;
 
   requestAnimationFrame(() => centerPressed("citypick"));
 }
@@ -266,8 +270,8 @@ function renderResults(){
   const hits = P.filter(p => [p.n, p.z, p.a, p.d, p.t, p.v, CATS[p.k], cityOf(p.c).es, ...(Array.isArray(p.m) ? p.m : [p.m])].some(f => norm(f).includes(q)));
   box.innerHTML = `
     <h2 class="lbl">${hits.length} ${hits.length === 1 ? "resultado" : "resultados"}</h2>
-    <div class="list">${hits.length ? hits.map(p => entryHTML(p, true)).join("")
-      : `<p class="empty">Nada con “${esc(state.q)}”. Prueba con el nombre en chino o con una palabra como “pato”, “réplicas” o “bar”.</p>`}</div>`;
+    ${hits.length ? `<div class="vgrid">${hits.map(p => vcardHTML(p, true)).join("")}</div>`
+      : `<p class="empty">Nada con “${esc(state.q)}”. Prueba con el nombre en chino o con una palabra como “pato”, “réplicas” o “bar”.</p>`}`;
 }
 
 /* ---------- hoy: one day at a time ---------- */
@@ -329,6 +333,7 @@ function renderHoy(app){
     <h2 class="lbl">Tu día</h2>
     <ol class="tl day-tl">${d.items.map(it => `<li><span class="tm">${esc(it.time || "")}</span><span>${esc(it.text)}</span></li>`).join("")}</ol>
     ${transfers.length ? `<div class="row go-row">${transfers.map(tr => `<button class="btn go-btn" type="button" data-transfer="${esc(tr.id)}">Ir · ${esc(tr.n)}</button>`).join("")}</div>` : ""}
+    ${allTickets().some(t => t.date === d.date) ? `<h2 class="lbl">Tu boleto</h2><div class="row">${allTickets().filter(t => t.date === d.date).map(t => `<button class="btn primary" type="button" data-show-ticket="${esc(t.id)}">${esc(t.num || t.id)} · ${esc(t.dep || "")} → ${esc(t.to)}</button>`).join("")}</div>` : ""}
 
     ${slots.length ? `<h2 class="lbl">Tu rato libre</h2>${slots.map(s => `<p class="gp"><span class="tm">${esc(s[1])}</span> ${esc(s[2])}</p>`).join("")}` : ""}
 
@@ -337,9 +342,14 @@ function renderHoy(app){
 
     ${spentDay.length ? `<div class="day-gastos"><span>Gastaste este día</span><b>${fmtMXN(sumBy(spentDay, toMXN))} MXN</b></div>` : ""}
 
+    <h2 class="lbl">Hora ahora</h2>
+    ${clockHTML()}
+
     <div class="row quick">
       <button class="btn primary" type="button" data-add-gasto data-gdate="${d.date}" data-gcityid="${here.id}">Anotar gasto</button>
       <button class="btn" type="button" data-pick-city="${here.id}">Lugares en ${esc(here.es)} →</button>
+      ${((GUIDE.food || {})[here.id] || []).length ? `<button class="btn" type="button" data-food="${here.id}">Señala y pide</button>` : ""}
+      ${P.some(p => p.ll) ? `<button class="btn" type="button" data-mapcity="${here.id}">Cerca de mí</button>` : ""}
       <button class="btn" type="button" data-sub="frases-emergencia">Emergencias</button>
     </div>`;
 
@@ -375,37 +385,106 @@ function renderVirales(app){
       <button class="chip" type="button" data-vcat="all" aria-pressed="${state.vcat === "all"}">Todo</button>
       ${cats.map(([k, l]) => `<button class="chip" type="button" data-vcat="${k}" aria-pressed="${state.vcat === k}">${esc(l)}</button>`).join("")}
     </div>
-    ${shown.length ? `<div class="vgrid">${shown.map(p => `<button class="vcard k-${esc(p.k)}" type="button" data-open="${p.id}">
-        ${p.ph ? `<img src="${esc(p.ph.file)}" alt="${esc(p.ph.alt || p.n)}" loading="lazy" decoding="async">` : `<span class="vnoimg">${cityCode(cityOf(p.c))}</span>`}
-        <span class="vcity">${cityCode(cityOf(p.c))}</span>
-        <span class="vbody"><b class="vtitle">${esc(p.n)}</b><span class="zh" lang="${langOf(p.z)}">${esc(p.z)}</span>${p.v ? `<span class="vwhy">${esc(p.v)}</span>` : ""}</span>
-      </button>`).join("")}</div>` : `<p class="empty">Nada viral con este filtro.</p>`}
+    ${shown.length ? `<div class="vgrid">${shown.map(p => vcardHTML(p, true)).join("")}</div>` : `<p class="empty">Nada viral con este filtro.</p>`}
     <p class="fine">Lo viral sale de guías y blogs que citan TikTok, Douyin, Xiaohongshu o Instagram. Toca una tarjeta para ver imperdibles, precios y cómo llegar.</p>`;
 }
 
-function openPlace(id){
-  const p = byId[id];
-  if (!p) return;
-  state.q = p.n;
-  setView("buscar");
+/* ---------- página de lugar ---------- */
+
+function vcardHTML(p, withCity){
+  const img = p.ph || p.pp;
+  return `<article class="vcard k-${esc(p.k)}">
+    <button class="vc-open" type="button" data-open="${p.id}" aria-label="Ver ${esc(p.n)}">
+      ${img ? `<img src="${esc(img.file)}" alt="${esc(img.alt || p.n)}" loading="lazy" decoding="async">` : `<span class="vnoimg">${cityCode(cityOf(p.c))}</span>`}
+      <span class="vcity">${withCity ? cityCode(cityOf(p.c)) : esc(CATS[p.k].split(/[ ,]/)[0])}</span>
+      <span class="vbody"><b class="vtitle">${esc(p.n)}</b><span class="zh" lang="${langOf(p.z)}">${esc(p.z)}</span>${p.v ? `<span class="vwhy">${esc(p.v)}</span>` : p.p ? `<span class="vwhy price">${esc(p.p)}</span>` : ""}</span>
+    </button>
+    ${favHTML(p)}
+  </article>`;
 }
+
+const dishCardHTML = (d, cid, i) => `<article class="rcard k-com">
+  <button class="rc-open" type="button" data-dish="${cid}|${i}">
+    ${d.ph ? `<img src="${esc(d.ph.file)}" alt="${esc(d.ph.alt || d.es)}" loading="lazy" decoding="async">` : `<span class="cover-code" lang="${langOf(d.zh)}">${esc(String(d.zh || "").slice(0, 2))}</span>`}
+    <span class="cat">${d.spice ? "Pica" : "No pica"}</span>
+    <span class="rc-txt"><b class="rec-title">${esc(d.es)}</b><span class="zh" lang="${langOf(d.zh)}">${esc(d.zh)}</span>${d.price ? `<span class="rc-price">${esc(d.price)}</span>` : ""}</span>
+  </button>
+</article>`;
+
+const nearRowHTML = (p, d, dir) => `<div class="near-row k-${esc(p.k)}">
+  <span class="near-d">${d == null ? `<span class="cat">${esc(CATS[p.k].split(/[ ,]/)[0])}</span>` : `<b>${fmtKm(d)}</b><span>${dir}</span>`}</span>
+  <button class="rec-open" type="button" data-open="${p.id}"><b class="rec-title">${esc(p.n)}</b><span class="zh" lang="${langOf(p.z)}">${esc(p.z)}</span>${p.ll && p.ll[2] === "baja" ? `<span class="approx">Ubicación aproximada</span>` : ""}</button>
+  <button class="go" type="button" data-go="${p.id}" aria-label="Mostrar ${esc(p.n)} al chofer">Ir</button>
+</div>`;
+
+function renderPlace(app){
+  const p = byId[state.place];
+  if (!p){ state.place = null; render(); return; }
+  const dishes = ((GUIDE.food || {})[p.c] || []).map((d, i) => ({d, i})).filter(x => (x.d.where || []).includes(p.n));
+  const origin = p.ll ? originFor(p.c) : null;
+  const near = p.ll ? P.filter(q => q.id !== p.id && q.c === p.c && q.ll).map(q => ({q, d: distKm(p.ll, q.ll)})).filter(x => x.d < 1.5).sort((a, b) => a.d - b.d).slice(0, 8) : [];
+  app.innerHTML = `<div class="place">
+    ${origin ? `<p class="dist-chip">${fmtKm(distKm(origin.pt, p.ll))} ${dirTo(origin.pt, p.ll)} de ${origin.label}</p>` : ""}
+    ${entryHTML(p, true)}
+    ${(p.gal || []).length ? `<h2 class="lbl">Más fotos</h2>${stripHTML(p.gal)}` : ""}
+    ${dishes.length ? `<h2 class="lbl">Pide aquí</h2><div class="rail">${dishes.map(({d, i}) => dishCardHTML(d, p.c, i)).join("")}</div>` : ""}
+    ${near.length ? `<h2 class="lbl">Cerca de aquí</h2><div class="near">${near.map(({q, d}) => nearRowHTML(q, d, dirTo(p.ll, q.ll))).join("")}</div>` : ""}
+    <div class="row quick"><button class="btn" type="button" data-pick-city="${p.c}">Más lugares en ${esc(cityOf(p.c).es)} →</button></div>
+  </div>`;
+}
+
+function openPlace(id){
+  if (!byId[id]) return;
+  if (!state.place) state.placeY = window.scrollY;
+  state.place = id;
+  history.pushState({place: id}, "", "#lugar/" + id);
+  render();
+  window.scrollTo({top: 0});
+}
+
+function closePlace(){
+  state.place = null;
+  const hash = state.tab === "ciudades" ? `ciudades/${state.city}` : state.tab === "mas" && state.sub ? `mas/${state.sub}` : state.tab;
+  history.replaceState(null, "", "#" + hash);
+  render();
+  const y = state.placeY || 0;
+  requestAnimationFrame(() => window.scrollTo({top: y}));
+}
+
+window.addEventListener("popstate", () => {
+  const m = location.hash.match(/^#lugar\/(.+)$/);
+  if (m && byId[m[1]]){ state.place = m[1]; render(); window.scrollTo({top: 0}); }
+  else if (state.place) closePlace();
+});
 
 /* ---------- más: hub, guía, hoteles, traslados ---------- */
 
 const TOPICS = {
-  "traslados": {icon: "train", label: "Traslados", desc: "Estaciones y aeropuertos en chino"},
-  "hoteles": {icon: "door", label: "Mis hoteles", desc: "Captura tus hoteles para el chofer"},
-  "frases-emergencia": {icon: "cross", label: "Emergencias", desc: "110, 120 y frases"},
-  "emergencias": {icon: "bank", label: "Embajadas y hospitales", desc: "México, España y clínicas"},
-  "restaurante": {icon: "fork", label: "Restaurante", desc: "Sin picante, alergias, la cuenta"},
-  "regateo": {icon: "percent", label: "Regateo", desc: "Calculadora y frases"},
-  "replicas": {icon: "copy", label: "Réplicas", desc: "Calidades y precios reales"},
-  "que-comprar": {icon: "bag", label: "Qué comprar", desc: "Y qué no, en ropa y tecnología"},
-  "marcas": {icon: "star", label: "Marcas chinas", desc: "Deportivas, moda y outdoor"},
-  "apps": {icon: "phone", label: "Apps", desc: "Qué bajar antes de volar"},
-  "esim": {icon: "signal", label: "eSIM y VPN", desc: "Internet sin bloqueos"},
-  "dinero": {icon: "coin", label: "Dinero", desc: "Pagos y devolución de impuestos"}
+  "boletos": {g: "viaje", icon: "ticket", label: "Mis boletos", desc: "Vuelos y trenes en grande"},
+  "viajeros": {g: "viaje", icon: "people", label: "Viajeros", desc: "Quién va y su asiento"},
+  "hoteles": {g: "viaje", icon: "door", label: "Mis hoteles", desc: "Captura tus hoteles para el chofer"},
+  "traslados": {g: "viaje", icon: "train", label: "Traslados", desc: "Estaciones y aeropuertos en chino"},
+  "tren-avion": {g: "viaje", icon: "train", label: "Tren y avión", desc: "Paso a paso en la estación"},
+  "clima": {g: "viaje", icon: "sun", label: "Clima y ropa", desc: "Qué llevar en cada ciudad"},
+  "checklist": {g: "viaje", icon: "check", label: "Checklist", desc: "Antes de volar y maleta"},
+  "platillos": {g: "comer", icon: "bowl", label: "Señala y pide", desc: "Platillos con foto para el mesero"},
+  "frases": {g: "comer", icon: "speaker", label: "Frases con audio", desc: "Hotel, taxi, alergias y compras"},
+  "restaurante": {g: "comer", icon: "fork", label: "Restaurante", desc: "Sin picante, alergias, la cuenta"},
+  "cerca": {g: "mover", icon: "pin", label: "Cerca de mí", desc: "Mapa y distancias con GPS"},
+  "metro": {g: "mover", icon: "metro", label: "Metro", desc: "Mapas sin internet"},
+  "compras-lista": {g: "compras", icon: "cart", label: "Lista de compras", desc: "Con tu precio meta"},
+  "regateo": {g: "compras", icon: "percent", label: "Regateo", desc: "Calculadora y frases"},
+  "replicas": {g: "compras", icon: "copy", label: "Réplicas", desc: "Calidades y precios reales"},
+  "que-comprar": {g: "compras", icon: "bag", label: "Qué comprar", desc: "Y qué no, en ropa y tecnología"},
+  "marcas": {g: "compras", icon: "star", label: "Marcas chinas", desc: "Deportivas, moda y outdoor"},
+  "tallas": {g: "compras", icon: "shirt", label: "Tallas", desc: "China, Corea y México"},
+  "frases-emergencia": {g: "ayuda", icon: "cross", label: "Emergencias", desc: "110, 120 y frases"},
+  "emergencias": {g: "ayuda", icon: "bank", label: "Embajadas y hospitales", desc: "México, España y clínicas"},
+  "apps": {g: "ayuda", icon: "phone", label: "Apps", desc: "Qué bajar antes de volar"},
+  "esim": {g: "ayuda", icon: "signal", label: "eSIM y VPN", desc: "Internet sin bloqueos"},
+  "dinero": {g: "ayuda", icon: "coin", label: "Dinero", desc: "Pagos y devolución de impuestos"}
 };
+const GROUPS = [["viaje", "Tu viaje"], ["comer", "Comer y hablar"], ["mover", "Moverte"], ["compras", "Compras"], ["ayuda", "Ayuda y dinero"]];
 
 const hubIcon = name => `<span class="hub-ico"><svg viewBox="0 0 24 24"><use href="#i-${name}"/></svg></span>`;
 
@@ -452,12 +531,23 @@ function hotelsEditorHTML(){
 }
 
 const VIRTUAL = [
-  {id: "traslados", title: "Traslados en chino", intro: "Estaciones y aeropuertos de tu itinerario. Toca 去 para enseñárselo al taxista.", html: transfersHTML},
-  {id: "hoteles", title: "Mis hoteles", html: hotelsEditorHTML}
+  {id: "traslados", title: "Traslados en chino", intro: "Estaciones y aeropuertos de tu itinerario. Toca Ir para enseñárselo al taxista.", html: transfersHTML},
+  {id: "hoteles", title: "Mis hoteles", html: hotelsEditorHTML},
+  {id: "boletos", title: "Mis boletos", html: boletosHTML},
+  {id: "viajeros", title: "Viajeros", html: viajerosHTML},
+  {id: "tren-avion", title: "Tren y avión paso a paso", html: () => { const L = GUIDE.logi || {}; return stepsHTML(L.rail) + stepsHTML(L.air_dom) + stepsHTML(L.air_intl); }, when: () => GUIDE.logi && GUIDE.logi.rail},
+  {id: "clima", title: "Clima y qué ropa llevar", html: climaHTML, when: () => GUIDE.logi && (GUIDE.logi.climate || []).length},
+  {id: "checklist", title: "Checklist del viaje", html: checklistHTML, when: () => GUIDE.logi && (GUIDE.logi.checklist || []).length},
+  {id: "platillos", title: "Señala y pide", intro: "Toca un platillo para enseñarlo en grande al mesero, o la bocina para escucharlo. Marca lo que no comes y te aviso cuál lo lleva.", html: platillosHTML, when: () => GUIDE.food},
+  {id: "frases", title: "Frases con audio", intro: "Toca la bocina para escucharla o la frase para enseñarla en grande. Si no suena en iPhone: Ajustes → Accesibilidad → Contenido leído → Voces, y descarga Chino (China continental) y Coreano con Wi-Fi antes de volar.", html: frasesHTML, when: () => (GUIDE.phrase_sets || []).length},
+  {id: "cerca", title: "Cerca de mí", html: cercaHTML, when: () => P.some(p => p.ll)},
+  {id: "metro", title: "Metro sin internet", html: metroHTML, when: () => GUIDE.metro && CITIES.some(c => GUIDE.metro[c.id] && GUIDE.metro[c.id].file)},
+  {id: "compras-lista", title: "Lista de compras", html: shopHTML},
+  {id: "tallas", title: "Tallas China, Corea y México", html: tallasHTML, when: () => GUIDE.tallas && (GUIDE.tallas.tables || []).length}
 ];
 
 function orderedSections(){
-  const all = [...VIRTUAL, ...(GUIDE.sections || [])];
+  const all = [...VIRTUAL.filter(s => !s.when || s.when()), ...(GUIDE.sections || [])];
   const known = Object.keys(TOPICS).map(id => all.find(s => s.id === id)).filter(Boolean);
   return [...known, ...all.filter(s => !TOPICS[s.id])];
 }
@@ -509,8 +599,9 @@ function blockHTML(b){
     </table></div>${b.note ? `<p class="fine">${esc(b.note)}</p>` : ""}`;
     case "phrases": return title + `<div class="phrases">${(b.items || []).map(x => {
       const i = SAY.push(x) - 1;
-      return `<button class="phrase" type="button" data-say="${i}"><span class="pz" lang="${langOf(x.zh)}">${esc(x.zh)}</span><span class="pp">${esc(x.py)}</span><span class="pe">${esc(x.es)}</span></button>`;
-    }).join("")}</div><p class="fine">Toca una frase para enseñarla en grande.</p>`;
+      const lg = langOf(x.zh);
+      return `<div class="phrase"><button class="phrase-open" type="button" data-say="${i}"><span class="pz" lang="${lg}">${esc(x.zh)}</span><span class="pp">${esc(x.py)}</span><span class="pe">${esc(x.es)}</span></button>${sayBtn(x.zh, lg)}</div>`;
+    }).join("")}</div><p class="fine">Toca una frase para enseñarla en grande${canSpeak ? " o la bocina para escucharla" : ""}.</p>`;
     default: return "";
   }
 }
@@ -525,11 +616,16 @@ function renderMas(app){
         ${hubIcon("receipt")}
         <span class="hub-txt"><b>Gastos del viaje</b><small>${gastos.length ? `${fmtMXN(spent)} MXN en ${gastos.length} ${gastos.length === 1 ? "gasto" : "gastos"}` : "Anota lo que gastas y se suma en pesos"}</small></span>
       </button>
-      ${secs.map(s => {
+    </div>
+    ${GROUPS.map(([g, label]) => {
+      const tiles = secs.filter(s => ((TOPICS[s.id] || {}).g || "ayuda") === g).map(s => {
         const t = TOPICS[s.id] || {icon: "list", label: s.title, desc: ""};
         return `<button class="hubtile" type="button" data-sub="${esc(s.id)}">${hubIcon(t.icon)}<b>${esc(t.label)}</b>${t.desc ? `<small>${esc(t.desc)}</small>` : ""}</button>`;
-      }).join("")}
-      <button class="hubtile" type="button" data-sub="all">${hubIcon("list")}<b>Guía completa</b><small>Todos los temas en una página</small></button>
+      });
+      return tiles.length ? `<h2 class="lbl">${esc(label)}</h2><div class="hub">${tiles.join("")}</div>` : "";
+    }).join("")}
+    <div class="hub">
+      <button class="hubtile wide" type="button" data-sub="all">${hubIcon("list")}<b>Guía completa</b><small>Todos los temas en una página</small></button>
     </div>
 
     <section class="offline">
@@ -559,7 +655,7 @@ function renderGuide(app){
   const secs = orderedSections();
   const shown = state.sub === "all" ? secs : secs.filter(s => s.id === state.sub);
   if (!shown.length){ state.sub = null; return renderMas(app); }
-  const money = ["regateo", "replicas", "que-comprar", "marcas", "dinero", "all"].includes(state.sub);
+  const money = ["regateo", "replicas", "que-comprar", "marcas", "dinero", "compras-lista", "tallas", "all"].includes(state.sub);
   const r = GUIDE.rate;
   const conv = RATE && money ? `<div class="calc">
       <label for="cny">Yuanes a pesos</label>
@@ -579,6 +675,533 @@ function renderGuide(app){
       ${s.html ? s.html() : (s.blocks || []).map(blockHTML).join("")}
     </section>`).join("")}`;
   requestAnimationFrame(() => centerPressed("topicbar"));
+}
+
+/* ---------- voz ---------- */
+
+const canSpeak = "speechSynthesis" in window && typeof SpeechSynthesisUtterance !== "undefined";
+
+function speak(text, lang){
+  if (!canSpeak || !text) return;
+  speechSynthesis.cancel();
+  const u = new SpeechSynthesisUtterance(text);
+  u.lang = lang === "ko" ? "ko-KR" : "zh-CN";
+  const want = lang === "ko" ? /^ko/i : /^(zh[-_](CN|Hans)|cmn)/i;
+  const voices = speechSynthesis.getVoices();
+  const v = voices.find(x => want.test(x.lang) && x.localService) || voices.find(x => want.test(x.lang));
+  if (v) u.voice = v;
+  u.rate = 0.8;
+  speechSynthesis.speak(u);
+}
+
+/* phrases with blanks like 我手机尾号是XXXX would be read letter by letter, so they get no speaker */
+const sayBtn = (text, lang) => canSpeak && text && !/X/.test(text)
+  ? `<button class="say" type="button" data-speak="${esc(text)}" data-lang="${lang}" aria-label="Escuchar"><svg viewBox="0 0 24 24"><use href="#i-speaker"/></svg></button>`
+  : "";
+
+const sourcesHTML = list => (list || []).length
+  ? `<p class="fine">Fuentes: ${list.map((u, i) => `<a href="${esc(u)}" target="_blank" rel="noopener">${i + 1}</a>`).join(" · ")}</p>`
+  : "";
+
+function pickCity(key, ids){
+  if (!ids.includes(state[key])){
+    const h = currentHotelCity();
+    state[key] = ids.includes(h) ? h : ids[0];
+  }
+  return state[key];
+}
+
+const cityChips = (ids, attr, current) => `<div class="chips" role="toolbar" aria-label="Ciudad">${ids.map(id => `<button class="chip" type="button" ${attr}="${id}" aria-pressed="${id === current}">${esc(cityOf(id).es)}</button>`).join("")}</div>`;
+
+/* ---------- señala y pide ---------- */
+
+const AVOID = ["cacahuate", "mariscos", "pescado", "cerdo", "res", "cordero", "vísceras", "gluten", "huevo", "lácteos", "soya", "ajonjolí", "cilantro", "picante", "alcohol"];
+
+function dishHTML(d, cid, i, avoid){
+  const lg = langOf(d.zh);
+  const has = d.has || [];
+  const bad = has.filter(h => avoid.has(h));
+  const spice = Math.max(0, Math.min(3, Number(d.spice) || 0));
+  const chili = spice ? `<span class="chili" aria-label="Picante ${spice} de 3">${"●".repeat(spice)}<i>${"●".repeat(3 - spice)}</i> pica</span>` : `<span class="chili none">No pica</span>`;
+  const where = (d.where || []).map(n => P.find(p => p.c === cid && p.n === n)).filter(Boolean);
+  const foot = [d.s ? `<a class="src" href="${esc(d.s)}" target="_blank" rel="noopener">Fuente ↗</a>` : "", d.ph ? `Foto ilustrativa: ${creditHTML(d.ph)}` : ""].filter(Boolean).join(" · ");
+  return `<article class="dish${bad.length ? " warn" : ""}">
+    <button class="dish-open" type="button" data-dish="${cid}|${i}" aria-label="Enseñar ${esc(d.es)} en grande">
+      <span class="dish-ph">${d.ph ? `<img src="${esc(d.ph.file)}" alt="${esc(d.ph.alt || d.es)}" loading="lazy" decoding="async">` : `<span class="cover-code" lang="${lg}">${esc(String(d.zh || "").slice(0, 2))}</span>`}</span>
+      <span class="dish-body">
+        <span class="dz" lang="${lg}">${esc(d.zh)}</span>
+        <span class="dpy">${esc(d.py || "")}</span>
+        <b class="des">${esc(d.es)}</b>
+        <span class="dmeta">${chili}${d.price ? `<span>${esc(d.price)}</span>` : ""}</span>
+      </span>
+    </button>
+    ${bad.length ? `<p class="dwarn">Ojo: lleva ${esc(bad.join(", "))}</p>` : ""}
+    ${d.d ? `<p class="dd">${esc(d.d)}</p>` : ""}
+    ${has.length ? `<div class="tags">${has.map(h => `<span class="tag ${avoid.has(h) ? "no" : "has"}">${esc(h)}</span>`).join("")}</div>` : ""}
+    ${d.tip ? `<p class="tip"><b>Tip:</b> ${esc(d.tip)}</p>` : ""}
+    ${where.length ? `<p class="dwhere">Pruébalo en: ${where.map(p => `<button class="linkish" type="button" data-open="${p.id}">${esc(p.n)}</button>`).join(", ")}</p>` : ""}
+    <div class="dish-foot">${sayBtn(d.zh, lg)}${foot ? `<span class="credit">${foot}</span>` : ""}</div>
+  </article>`;
+}
+
+function platillosHTML(){
+  const ids = CITIES.map(c => c.id).filter(id => ((GUIDE.food || {})[id] || []).length);
+  if (!ids.length) return `<p class="empty">Todavía no hay platillos cargados.</p>`;
+  const cid = pickCity("fcity", ids);
+  const avoid = new Set(store.get("rvc-avoid", []));
+  return `${cityChips(ids, "data-fcity", cid)}
+    <details class="avoid"${avoid.size ? " open" : ""}>
+      <summary>No como… ${avoid.size ? `<b>${avoid.size}</b>` : `<small>márcalo y te aviso</small>`}</summary>
+      <div class="suggest">${AVOID.map(a => `<button class="chip" type="button" data-avoid="${a}" aria-pressed="${avoid.has(a)}">${esc(a)}</button>`).join("")}</div>
+    </details>
+    <div class="dgrid">${GUIDE.food[cid].map((d, i) => dishHTML(d, cid, i, avoid)).join("")}</div>`;
+}
+
+function openDish(d){
+  const lg = langOf(d.zh);
+  openCard({ask: lg === "ko" ? "이거 주세요:" : "我要这个：", big: d.zh, where: d.py, es: d.es + (d.price ? " · " + d.price : ""), speak: {text: d.zh, lang: lg}, img: d.ph && d.ph.file});
+}
+
+/* ---------- frases con audio ---------- */
+
+function frasesHTML(){
+  const sets = GUIDE.phrase_sets || [];
+  if (!sets.length) return `<p class="empty">Todavía no hay frases cargadas.</p>`;
+  if (!sets.some(s => s.id === state.pset)) state.pset = sets[0].id;
+  const s = sets.find(x => x.id === state.pset);
+  return `<div class="chips" role="toolbar" aria-label="Situación">${sets.map(x => `<button class="chip" type="button" data-pset="${esc(x.id)}" aria-pressed="${x.id === s.id}">${esc(x.title)}</button>`).join("")}</div>
+    ${blockHTML({t: "phrases", items: s.items || []})}`;
+}
+
+/* ---------- viajeros y boletos (solo en este teléfono; se pasan con un código) ---------- */
+
+const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+const initials = n => String(n || "?").trim().split(/\s+/).slice(0, 2).map(w => w[0] || "").join("").toUpperCase();
+
+function travelers(){
+  const list = store.get("rvc-pax", []);
+  return list.length ? list : [{id: "yo", n: "Yo"}];
+}
+
+function allTickets(){
+  const custom = store.get("rvc-custom-tickets", []).map(t => Object.assign({custom: true}, t));
+  return [...(TRIP.tickets || []), ...custom].sort((a, b) => (a.date + (a.dep || "")).localeCompare(b.date + (b.dep || "")));
+}
+
+const ticketData = id => store.get("rvc-tickets", {})[id] || {};
+
+function whoOn(t){
+  const ids = travelers().map(p => p.id);
+  const who = ticketData(t.id).who;
+  return Array.isArray(who) ? who.filter(x => ids.includes(x)) : ids;
+}
+
+const paxChips = ids => `<span class="pax">${travelers().filter(p => ids.includes(p.id)).map(p => `<span class="pax-i" title="${esc(p.n)}">${esc(initials(p.n))}</span>`).join("")}</span>`;
+
+function ticketHTML(t, pax){
+  const d = ticketData(t.id);
+  const who = whoOn(t);
+  const tr = t.go && TRIP.transfers[t.go];
+  const isTrain = t.kind === "tren";
+  const f = (p, k) => `tk-${esc(t.id)}-${esc(p.id)}-${k}`;
+  const filled = who.filter(id => { const v = (d.pax || {})[id]; return v && (v.code || v.seat); }).length;
+  return `<article class="ticket ${isTrain ? "is-train" : "is-flight"}">
+    <div class="tk-top"><span class="tk-kind">${isTrain ? "Tren" : t.kind === "otro" ? "Traslado" : "Vuelo"}</span><span class="tk-date">${esc(dayShort(t.date))}</span></div>
+    <div class="tk-id">${esc(t.num || t.id)}</div>
+    <div class="tk-route">
+      <div><b>${esc(t.dep || "--:--")}</b><span>${esc(t.from)}</span></div>
+      <span class="tk-arrow" aria-hidden="true">→</span>
+      <div><b>${esc(t.arr || "--:--")}</b><span>${esc(t.to)}</span></div>
+    </div>
+    <div class="tk-meta">${[t.carrier, t.cls, tr && tr.term ? "Terminal: " + tr.term : ""].filter(Boolean).map(x => `<span>${esc(x)}</span>`).join("")}${paxChips(who)}</div>
+    <details class="tk-edit"><summary>${filled ? `Datos de ${filled} de ${who.length} ${who.length === 1 ? "viajero" : "viajeros"}` : "Anotar localizador y asiento"}</summary>
+      ${pax.map(p => {
+        const v = (d.pax || {})[p.id] || {};
+        return `<div class="tk-pax">
+          <label class="whoc"><input type="checkbox" data-tk-who="${esc(t.id)}" value="${esc(p.id)}"${who.includes(p.id) ? " checked" : ""}> <b>${esc(p.n)}</b> va en este</label>
+          <div class="gfields">
+            <div class="wide"><label for="${f(p, "code")}">Localizador</label><input id="${f(p, "code")}" value="${esc(v.code || "")}" autocapitalize="characters" autocomplete="off"></div>
+            ${isTrain
+              ? `<div><label for="${f(p, "car")}">Vagón</label><input id="${f(p, "car")}" inputmode="numeric" value="${esc(v.car || "")}"></div>`
+              : `<div><label for="${f(p, "gate")}">Puerta</label><input id="${f(p, "gate")}" value="${esc(v.gate || "")}" autocapitalize="characters"></div>`}
+            <div><label for="${f(p, "seat")}">Asiento</label><input id="${f(p, "seat")}" value="${esc(v.seat || "")}" autocapitalize="characters"></div>
+          </div>
+        </div>`;
+      }).join("")}
+      <div class="row"><button class="btn primary" type="button" data-save-ticket="${esc(t.id)}">Guardar</button>${t.custom ? `<button class="btn gdel" type="button" data-del-ticket="${esc(t.id)}">Borrar boleto</button>` : ""}</div>
+    </details>
+    <div class="row"><button class="btn go-btn" type="button" data-show-ticket="${esc(t.id)}">Mostrar en grande</button>${tr ? `<button class="btn" type="button" data-transfer="${esc(tr.id)}">Ir ${isTrain ? "a la estación" : "al aeropuerto"}</button>` : ""}</div>
+  </article>`;
+}
+
+function boletosHTML(){
+  const pax = travelers();
+  return `<p class="gp">Anota localizador y asiento de cada viajero y toca "Mostrar en grande" en la estación o el mostrador. Se guarda solo en este teléfono.</p>
+    <div class="row"><button class="btn" type="button" data-sub="viajeros">Viajeros · ${pax.length}</button></div>
+    <div class="tickets">${allTickets().map(t => ticketHTML(t, pax)).join("")}</div>
+    <details class="calc addtk">
+      <summary><b>Agregar vuelo, tren o traslado</b></summary>
+      <form class="gform" id="tkform" autocomplete="off" novalidate>
+        <div class="gfields">
+          <div><label for="t-kind">Tipo</label><select id="t-kind"><option value="vuelo">Vuelo</option><option value="tren">Tren</option><option value="otro">Traslado</option></select></div>
+          <div><label for="t-num">Número</label><input id="t-num" placeholder="Ej. AM90" autocapitalize="characters"></div>
+          <div><label for="t-date">Fecha</label><input id="t-date" type="date"></div>
+          <div><label for="t-carrier">Aerolínea o empresa</label><input id="t-carrier"></div>
+          <div><label for="t-from">Sale de</label><input id="t-from" placeholder="CDMX (MEX)"></div>
+          <div><label for="t-to">Llega a</label><input id="t-to" placeholder="Seúl (ICN)"></div>
+          <div><label for="t-dep">Sale a las</label><input id="t-dep" type="time"></div>
+          <div><label for="t-arr">Llega a las</label><input id="t-arr" type="time"></div>
+        </div>
+        <fieldset class="who"><legend>Quién va</legend>${pax.map(p => `<label class="whoc"><input type="checkbox" name="t-who" value="${esc(p.id)}" checked> ${esc(p.n)}</label>`).join("")}</fieldset>
+        <div class="row"><button class="btn primary" type="submit">Agregar</button><span class="saved-msg" id="tkaddmsg" aria-live="polite"></span></div>
+      </form>
+    </details>`;
+}
+
+function saveTicket(id){
+  const all = store.get("rvc-tickets", {});
+  const d = all[id] || {};
+  d.pax = d.pax || {};
+  d.who = [];
+  travelers().forEach(p => {
+    const v = k => ((document.getElementById(`tk-${id}-${p.id}-${k}`) || {}).value || "").trim().toUpperCase();
+    d.pax[p.id] = {code: v("code"), car: v("car"), gate: v("gate"), seat: v("seat")};
+    const box = [...document.querySelectorAll("[data-tk-who]")].find(b => b.dataset.tkWho === id && b.value === p.id);
+    if (!box || box.checked) d.who.push(p.id);
+  });
+  all[id] = d;
+  store.set("rvc-tickets", all);
+  render();
+}
+
+function addTicket(){
+  const $ = id => document.getElementById(id);
+  const num = $("t-num").value.trim().toUpperCase(), date = $("t-date").value, from = $("t-from").value.trim(), to = $("t-to").value.trim();
+  if (!num || !date || !from || !to){ $("tkaddmsg").textContent = "Falta número, fecha, de dónde sale o a dónde llega."; return; }
+  const id = "c-" + uid();
+  const list = store.get("rvc-custom-tickets", []);
+  list.push({id, num, kind: $("t-kind").value, date, from, to, dep: $("t-dep").value, arr: $("t-arr").value, carrier: $("t-carrier").value.trim()});
+  store.set("rvc-custom-tickets", list);
+  const all = store.get("rvc-tickets", {});
+  all[id] = {who: [...document.querySelectorAll('input[name="t-who"]:checked')].map(x => x.value), pax: {}};
+  store.set("rvc-tickets", all);
+  render();
+}
+
+function delTicket(id){
+  store.set("rvc-custom-tickets", store.get("rvc-custom-tickets", []).filter(t => t.id !== id));
+  const all = store.get("rvc-tickets", {});
+  delete all[id];
+  store.set("rvc-tickets", all);
+  render();
+}
+
+function showTicket(id){
+  const t = allTickets().find(x => x.id === id);
+  if (!t) return;
+  const d = ticketData(t.id);
+  const pax = travelers().filter(p => whoOn(t).includes(p.id));
+  const train = t.kind === "tren";
+  const ko = HANGUL.test(t.fromz || "");
+  const lines = pax.map(p => {
+    const v = (d.pax || {})[p.id] || {};
+    const seat = train
+      ? [v.car && `${v.car}车`, v.seat && `${v.seat}号`].filter(Boolean).join(" ")
+      : [v.seat && (ko ? `좌석 ${v.seat}` : `座位 ${v.seat}`), v.gate && (ko ? `탑승구 ${v.gate}` : `登机口 ${v.gate}`)].filter(Boolean).join(" · ");
+    return [pax.length > 1 ? (p.pz || p.n) : "", seat, v.code].filter(Boolean).join(" · ");
+  }).filter(Boolean);
+  openCard({
+    ask: t.fromz ? (train ? "我的车票：" : ko ? "제 항공편:" : "我的航班：") : "",
+    big: (t.num || t.id) + (t.clsz ? " " + t.clsz : ""),
+    where: [t.fromz && t.toz ? `${t.fromz} → ${t.toz}` : "", ...lines].filter(Boolean).join("\n"),
+    es: [`${dayShort(t.date)} · ${t.dep || ""}–${t.arr || ""}`, `${t.from} → ${t.to}`, pax.map(p => p.n).join(", ")].join(" · ")
+  });
+}
+
+function viajerosHTML(){
+  const list = store.get("rvc-pax", []);
+  const shown = list.length ? list : [{id: "yo", n: "Yo", implicit: true}];
+  return `<p class="gp">Agrega a quienes viajan contigo para anotar el asiento y localizador de cada uno en Mis boletos. Se guarda solo en este teléfono; para pasarlo a otro usa "Compartir código".</p>
+    <div class="glist">${shown.map(p => `<div class="gitem pax-row">
+      <span class="pax-i big" aria-hidden="true">${esc(initials(p.n))}</span>
+      <div class="gbody"><h4>${esc(p.n)}</h4>
+        ${p.pz ? `<span class="meta"><span>Pasaporte: ${esc(p.pz)}</span></span>` : ""}
+        ${p.tel ? `<a class="tel" href="tel:${esc(String(p.tel).replace(/[^\d+]/g, ""))}">${esc(p.tel)}</a>` : ""}
+        ${p.note ? `<p class="tip">${esc(p.note)}</p>` : ""}
+      </div>
+      ${p.implicit || list.length < 2 ? "" : `<button class="btn gdel" type="button" data-pax-del="${esc(p.id)}" aria-label="Quitar a ${esc(p.n)}">×</button>`}
+    </div>`).join("")}</div>
+    <form class="calc gform" id="paxform" autocomplete="off" novalidate>
+      <label for="p-n">${list.length ? "Agregar viajero" : "Empieza por ti"}</label>
+      <div class="gfields">
+        <div class="wide"><label for="p-n">Nombre</label><input id="p-n" maxlength="40" placeholder="Ej. María"></div>
+        <div class="wide"><label for="p-pz">Nombre como viene en el pasaporte</label><input id="p-pz" maxlength="60" autocapitalize="characters" placeholder="GARCIA LOPEZ MARIA"></div>
+        <div><label for="p-tel">Teléfono o WhatsApp</label><input id="p-tel" type="tel"></div>
+        <div><label for="p-note">Nota</label><input id="p-note" maxlength="80" placeholder="Llega el 25, alergias…"></div>
+      </div>
+      <div class="row"><button class="btn primary" type="submit">Agregar</button></div>
+    </form>
+    <h3 class="gsub">Pasarlo a otro teléfono</h3>
+    <p class="gp">Manda el código por WhatsApp y pégalo en la app del otro teléfono. Pasa viajeros, boletos, asientos y hoteles.</p>
+    <div class="row"><button class="btn primary" type="button" data-export>Compartir código</button><span class="saved-msg" id="expmsg" aria-live="polite"></span></div>
+    <div class="calc"><label for="imp">Pegar código</label><textarea id="imp" class="imp" rows="3"></textarea>
+      <div class="row"><button class="btn" type="button" data-import>Importar</button><span class="saved-msg" id="impmsg" aria-live="polite"></span></div>
+    </div>`;
+}
+
+function addPax(){
+  const $ = id => document.getElementById(id);
+  const n = $("p-n").value.trim();
+  if (!n){ $("p-n").focus(); return; }
+  const list = store.get("rvc-pax", []);
+  // the first person added is you: it takes the "yo" id so seats already saved for "Yo" stay yours
+  list.push({id: list.length ? uid() : "yo", n, pz: $("p-pz").value.trim().toUpperCase(), tel: $("p-tel").value.trim(), note: $("p-note").value.trim()});
+  store.set("rvc-pax", list);
+  render();
+}
+
+function exportCode(){
+  const data = {v: 1, pax: store.get("rvc-pax", []), tickets: store.get("rvc-tickets", {}), custom: store.get("rvc-custom-tickets", []), hotels: store.get("rvc-hotels", {})};
+  return "RVC1:" + btoa(unescape(encodeURIComponent(JSON.stringify(data))));
+}
+
+function importCode(text){
+  const m = String(text || "").match(/RVC1:([A-Za-z0-9+/=]+)/);
+  if (!m) return "Ese código no es de esta app.";
+  let d;
+  try{ d = JSON.parse(decodeURIComponent(escape(atob(m[1])))); }catch(e){ return "El código está incompleto: cópialo otra vez completo."; }
+  const merge = (mine, theirs) => [...mine, ...(theirs || []).filter(x => x && x.id && !mine.some(y => y.id === x.id))];
+  store.set("rvc-pax", merge(store.get("rvc-pax", []), d.pax));
+  store.set("rvc-custom-tickets", merge(store.get("rvc-custom-tickets", []), d.custom));
+  const tk = store.get("rvc-tickets", {});
+  Object.entries(d.tickets || {}).forEach(([id, v]) => {
+    const cur = tk[id] || {};
+    tk[id] = {who: Array.from(new Set([...(cur.who || []), ...(v.who || [])])), pax: Object.assign({}, v.pax, cur.pax)};
+  });
+  store.set("rvc-tickets", tk);
+  store.set("rvc-hotels", Object.assign({}, d.hotels || {}, store.get("rvc-hotels", {})));
+  return "";
+}
+
+/* ---------- reloj ---------- */
+
+const ZONES = [["CDMX", "America/Mexico_City"], ["China", "Asia/Shanghai"], ["Seúl", "Asia/Seoul"]];
+const clockHTML = () => `<div class="clock">${ZONES.map(([l, z]) => `<div><span>${l}</span><b data-tz="${z}">--:--</b><small data-tzd="${z}"></small></div>`).join("")}</div>`;
+
+function tickClock(){
+  const now = new Date();
+  document.querySelectorAll("[data-tz]").forEach(el => {
+    el.textContent = new Intl.DateTimeFormat("es-MX", {timeZone: el.dataset.tz, hour: "2-digit", minute: "2-digit", hour12: false}).format(now);
+  });
+  document.querySelectorAll("[data-tzd]").forEach(el => {
+    el.textContent = new Intl.DateTimeFormat("es-MX", {timeZone: el.dataset.tzd, weekday: "short", day: "numeric", month: "short"}).format(now);
+  });
+}
+setInterval(tickClock, 20000);
+
+/* ---------- tren y avión, clima, checklist ---------- */
+
+function stepsHTML(b){
+  if (!b || !(b.steps || []).length) return "";
+  return `<h3 class="gsub">${esc(b.title)}</h3>${b.intro ? `<p class="gp">${esc(b.intro)}</p>` : ""}
+    <ol class="steps">${b.steps.map(s => `<li class="step"><div class="gbody"><h4>${esc(s.h)}</h4>${s.b ? `<p>${esc(s.b)}</p>` : ""}${s.zh ? `<div class="sign"><span class="zh" lang="${langOf(s.zh)}">${esc(s.zh)}</span>${s.py ? `<span class="pp">${esc(s.py)}</span>` : ""}</div>` : ""}</div></li>`).join("")}</ol>
+    ${sourcesHTML(b.sources)}`;
+}
+
+function climaHTML(){
+  const list = (GUIDE.logi || {}).climate || [];
+  return `<div class="wx">${list.map(w => `<article class="wxc">
+      <div class="wx-top"><b>${esc(w.place)}</b><span>${esc(w.dates || "")}</span></div>
+      <div class="wx-t"><span class="hi">${esc(w.hi)}°</span><span class="lo">${esc(w.lo)}°</span></div>
+      ${w.sky ? `<p class="wx-sky">${esc(w.sky)}</p>` : ""}
+      ${w.wear ? `<p>${esc(w.wear)}</p>` : ""}
+      ${w.src ? `<a class="src" href="${esc(w.src)}" target="_blank" rel="noopener">Fuente ↗</a>` : ""}
+    </article>`).join("")}</div>
+    <p class="fine">Promedios históricos, no pronóstico: revisa el clima un par de días antes de cada ciudad.</p>`;
+}
+
+function checklistHTML(){
+  const groups = (GUIDE.logi || {}).checklist || [];
+  const done = store.get("rvc-check", {});
+  const total = groups.reduce((n, g) => n + (g.items || []).length, 0);
+  const n = groups.reduce((k, g) => k + (g.items || []).filter((_, i) => done[`${g.id}|${i}`]).length, 0);
+  return `<div class="hero"><span class="hero-lbl">Listo</span><span class="hero-num">${n} <small>de ${total}</small></span></div>
+    <div class="meter" role="meter" aria-label="Checklist" aria-valuemin="0" aria-valuemax="${total}" aria-valuenow="${n}"><span class="meter-fill" style="width:${total ? Math.round(n / total * 100) : 0}%"></span></div>
+    ${groups.map(g => `<h3 class="gsub">${esc(g.title)}</h3><ul class="checks">${(g.items || []).map((it, i) => {
+      const k = `${g.id}|${i}`;
+      return `<li><button class="check" type="button" data-check="${esc(k)}" aria-pressed="${!!done[k]}"><span class="box" aria-hidden="true"></span><span>${esc(it)}</span></button></li>`;
+    }).join("")}</ul>`).join("")}`;
+}
+
+/* ---------- cerca de mí: GPS del teléfono (funciona sin internet) + mapa esquemático ---------- */
+
+let HERE = null;
+
+function distKm(a, b){
+  const r = x => x * Math.PI / 180;
+  const s = Math.sin(r(b[0] - a[0]) / 2) ** 2 + Math.cos(r(a[0])) * Math.cos(r(b[0])) * Math.sin(r(b[1] - a[1]) / 2) ** 2;
+  return 12742 * Math.asin(Math.sqrt(s));
+}
+const fmtKm = km => km < 1 ? `${Math.max(50, Math.round(km * 20) * 50)} m` : `${km < 10 ? km.toFixed(1) : Math.round(km)} km`;
+const DIRS = ["al norte", "al noreste", "al este", "al sureste", "al sur", "al suroeste", "al oeste", "al noroeste"];
+
+function dirTo(a, b){
+  const r = x => x * Math.PI / 180;
+  const y = Math.sin(r(b[1] - a[1])) * Math.cos(r(b[0]));
+  const x = Math.cos(r(a[0])) * Math.sin(r(b[0])) - Math.sin(r(a[0])) * Math.cos(r(b[0])) * Math.cos(r(b[1] - a[1]));
+  return DIRS[Math.round(((Math.atan2(y, x) * 180 / Math.PI) + 360) % 360 / 45) % 8];
+}
+
+function nearestCity(pt){
+  let best = null;
+  P.forEach(p => { if (p.ll){ const d = distKm(pt, p.ll); if (!best || d < best.d) best = {c: p.c, d}; } });
+  return best && best.d < 80 ? best.c : null;
+}
+
+function originFor(cid){
+  if (HERE && nearestCity([HERE.lat, HERE.lng]) === cid) return {pt: [HERE.lat, HERE.lng], label: "tu ubicación"};
+  const saved = store.get("rvc-hotel-ll", {})[cid];
+  return saved ? {pt: saved, label: "tu hotel"} : null;
+}
+
+function mapSVG(cid, origin){
+  const pts = P.filter(p => p.c === cid && p.ll);
+  if (pts.length < 2) return "";
+  const mid = k => pts.map(p => p.ll[k]).sort((a, b) => a - b)[Math.floor(pts.length / 2)];
+  const center = [mid(0), mid(1)];
+  const core = pts.filter(p => distKm(center, p.ll) < 25);
+  const showMe = origin && distKm(center, origin.pt) < 25;
+  const cs = core.map(p => p.ll).concat(showMe ? [origin.pt] : []);
+  const lats = cs.map(c => c[0]), lngs = cs.map(c => c[1]);
+  const minLat = Math.min(...lats), maxLat = Math.max(...lats), minLng = Math.min(...lngs), maxLng = Math.max(...lngs);
+  const kx = Math.cos((minLat + maxLat) / 2 * Math.PI / 180);
+  const W = 1000, H = 760, pad = 60;
+  const spanX = Math.max((maxLng - minLng) * kx, 0.004), spanY = Math.max(maxLat - minLat, 0.004);
+  const s = Math.min((W - 2 * pad) / spanX, (H - 2 * pad - 40) / spanY);
+  const ox = (W - spanX * s) / 2, oy = (H - 40 - spanY * s) / 2;
+  const X = ln => (ox + (ln - minLng) * kx * s).toFixed(1);
+  const Y = la => (oy + (maxLat - la) * s).toFixed(1);
+  const pxPerKm = s / 111.32;
+  const barKm = [0.2, 0.5, 1, 2, 5, 10, 20].find(k => k * pxPerKm >= 120) || 20;
+  const pins = core.map(p => `<g class="pin" data-open="${p.id}"><title>${esc(p.n)}</title><circle class="k-${esc(p.k)}" cx="${X(p.ll[1])}" cy="${Y(p.ll[0])}" r="18"/></g>`).join("");
+  const me = showMe ? `<g class="me"><circle class="halo" cx="${X(origin.pt[1])}" cy="${Y(origin.pt[0])}" r="44"/><circle class="dot" cx="${X(origin.pt[1])}" cy="${Y(origin.pt[0])}" r="16"/></g>` : "";
+  return `<figure class="cmap">
+    <svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Mapa esquemático de ${esc(cityOf(cid).es)}">
+      <text x="${W - 90}" y="50">N ↑</text>
+      <line class="bar" x1="${pad}" y1="${H - 26}" x2="${(pad + barKm * pxPerKm).toFixed(1)}" y2="${H - 26}"/>
+      <text x="${pad}" y="${H - 44}">${barKm < 1 ? barKm * 1000 + " m" : barKm + " km"}</text>
+      ${pins}${me}
+    </svg>
+    <figcaption>Mapa sin calles: cada punto es un lugar (el color es el tipo)${showMe ? " y el punto azul eres tú" : ""}. Toca un punto para abrirlo.${core.length < pts.length ? ` ${pts.length - core.length} lugares lejos del centro solo salen en la lista.` : ""}</figcaption>
+  </figure>`;
+}
+
+function cercaHTML(){
+  const ids = CITIES.map(c => c.id).filter(id => P.some(p => p.c === id && p.ll));
+  if (!ids.length) return `<p class="empty">Todavía no hay ubicaciones cargadas.</p>`;
+  const cid = pickCity("mcity", ids);
+  const origin = originFor(cid);
+  const rows = P.filter(p => p.c === cid && p.ll).map(p => ({p, d: origin ? distKm(origin.pt, p.ll) : null}));
+  if (origin) rows.sort((a, b) => a.d - b.d);
+  return `<p class="gp">El GPS funciona sin internet. Toca "Usar mi ubicación" y los lugares se ordenan por cercanía; estando en tu hotel, guárdalo para ver qué te queda cerca aunque salgas. Distancias en línea recta.</p>
+    <div class="row"><button class="btn primary" type="button" data-locate>${HERE ? "Actualizar ubicación" : "Usar mi ubicación"}</button>${HERE && nearestCity([HERE.lat, HERE.lng]) ? `<button class="btn" type="button" data-save-here>Guardar aquí como mi hotel</button>` : ""}</div>
+    <p class="saved-msg" id="locmsg" aria-live="polite">${origin ? `Distancias desde ${origin.label}.` : ""}</p>
+    ${cityChips(ids, "data-mcity", cid)}
+    ${mapSVG(cid, origin)}
+    <h3 class="gsub">${origin ? `Lo más cerca de ${origin.label}` : `Lugares en ${esc(cityOf(cid).es)}`}</h3>
+    <div class="near">${rows.map(({p, d}) => nearRowHTML(p, d, d == null ? "" : dirTo(origin.pt, p.ll))).join("")}</div>`;
+}
+
+function locate(){
+  const msg = t => { const m = document.getElementById("locmsg"); if (m) m.textContent = t; };
+  if (!navigator.geolocation){ msg("Este navegador no permite usar la ubicación."); return; }
+  msg("Buscando tu ubicación…");
+  navigator.geolocation.getCurrentPosition(pos => {
+    HERE = {lat: pos.coords.latitude, lng: pos.coords.longitude};
+    const c = nearestCity([HERE.lat, HERE.lng]);
+    if (c) state.mcity = c;
+    render();
+    if (!c) msg("No estás cerca de ninguna ciudad del viaje; te muestro la lista por ciudad.");
+  }, err => msg(err.code === 1 ? "Sin permiso de ubicación: actívalo en Ajustes → Privacidad → Localización." : "No se pudo obtener tu ubicación; intenta en un lugar abierto."),
+  {enableHighAccuracy: true, timeout: 15000, maximumAge: 60000});
+}
+
+function saveHere(){
+  const c = HERE && nearestCity([HERE.lat, HERE.lng]);
+  if (!c) return;
+  const all = store.get("rvc-hotel-ll", {});
+  all[c] = [HERE.lat, HERE.lng];
+  store.set("rvc-hotel-ll", all);
+  render();
+  const m = document.getElementById("locmsg");
+  if (m) m.textContent = `Guardado como tu hotel en ${cityOf(c).es}.`;
+}
+
+/* ---------- metro ---------- */
+
+function metroHTML(){
+  const M = GUIDE.metro || {};
+  const ids = CITIES.map(c => c.id).filter(id => M[id] && M[id].file);
+  if (!ids.length) return `<p class="empty">Todavía no hay mapas de metro.</p>`;
+  const cid = pickCity("mcity", ids);
+  const m = M[cid];
+  const z = state.mzoom || 1;
+  const pay = (M.apps || {})[cid];
+  const payText = !pay ? "" : typeof pay === "string" ? pay : pay.text || pay.how || pay.pay || "";
+  return `${cityChips(ids, "data-mcity", cid)}
+    ${payText ? `<p class="gp"><b>Cómo pagar:</b> ${esc(payText)}${pay.src ? ` <a class="src" href="${esc(pay.src)}" target="_blank" rel="noopener">Fuente ↗</a>` : ""}</p>` : ""}
+    <div class="zoom"><button class="btn" type="button" data-mzoom="-1"${z <= 1 ? " disabled" : ""} aria-label="Alejar">−</button><button class="btn" type="button" data-mzoom="1"${z >= 4 ? " disabled" : ""} aria-label="Acercar">+</button><span>Zoom ${z}× · desliza para moverte</span></div>
+    <div class="metro-wrap"><img src="${esc(m.file)}" alt="Mapa del metro de ${esc(cityOf(cid).es)}" style="width:${z * 100}%" decoding="async"></div>
+    <p class="credit hero-credit">Mapa${m.year ? ` ${esc(m.year)}` : ""}: ${creditHTML(m)}${m.note ? ` · ${esc(m.note)}` : ""}</p>`;
+}
+
+/* ---------- compras: lista con precio meta y tallas ---------- */
+
+function shopHTML(){
+  const items = store.get("rvc-shop", []);
+  const row = it => `<div class="shop-row${it.got ? " got" : ""}">
+    <button class="sbox" type="button" data-shop-got="${esc(it.id)}" aria-pressed="${!!it.got}" aria-label="${it.got ? "Marcar pendiente" : "Marcar comprado"}"></button>
+    <div class="gbody"><h4>${esc(it.n)}</h4><span class="meta">${[it.c && cityOf(it.c) ? cityOf(it.c).es : "", it.goal ? `meta ${fmtCNY(it.goal)} ≈ ${fmtMXN(it.goal * RATE_G)}` : "", it.max ? `máximo ${fmtCNY(it.max)}` : ""].filter(Boolean).map(x => `<span>${esc(x)}</span>`).join("")}</span></div>
+    <button class="btn gdel" type="button" data-shop-del="${esc(it.id)}" aria-label="Borrar ${esc(it.n)}">×</button>
+  </div>`;
+  const pending = items.filter(i => !i.got), got = items.filter(i => i.got);
+  return `<form class="calc gform" id="shopform" autocomplete="off" novalidate>
+      <label for="s-n">Qué quieres comprar</label>
+      <input id="s-n" type="text" maxlength="60" placeholder="Ej. tenis Li-Ning, bolsa, audífonos">
+      <div class="gfields">
+        <div><label for="s-goal">Precio meta en ¥</label><input id="s-goal" type="number" inputmode="decimal" min="0"></div>
+        <div><label for="s-max">No pagar más de ¥</label><input id="s-max" type="number" inputmode="decimal" min="0"></div>
+        <div class="wide"><label for="s-c">Dónde</label><select id="s-c"><option value="">Cualquier ciudad</option>${CITIES.map(c => `<option value="${c.id}">${esc(c.es)}</option>`).join("")}</select></div>
+      </div>
+      <div class="row"><button class="btn primary" type="submit">Agregar a la lista</button><button class="btn" type="button" data-sub="regateo">Calculadora de regateo</button></div>
+    </form>
+    ${items.length
+      ? `<h3 class="gsub">Pendientes · ${pending.length}</h3>${pending.length ? `<div class="shop">${pending.map(row).join("")}</div>` : `<p class="empty">Ya compraste todo.</p>`}
+         ${got.length ? `<h3 class="gsub">Comprado · ${got.length}</h3><div class="shop">${got.map(row).join("")}</div>` : ""}`
+      : `<p class="empty">Anota lo que quieres comprar con tu precio meta: así llegas al regateo con el número claro.</p>`}`;
+}
+
+function addShop(){
+  const $ = id => document.getElementById(id);
+  const n = $("s-n").value.trim();
+  if (!n){ $("s-n").focus(); return; }
+  const num = id => { const v = parseFloat($(id).value); return isFinite(v) && v > 0 ? Math.round(v) : 0; };
+  const items = store.get("rvc-shop", []);
+  items.push({id: uid(), n, goal: num("s-goal"), max: num("s-max"), c: $("s-c").value, got: false});
+  store.set("rvc-shop", items);
+  render();
+}
+
+function tallasHTML(){
+  const T = GUIDE.tallas || {};
+  const tables = T.tables || [];
+  if (!tables.some(t => t.id === state.tabla)) state.tabla = (tables[0] || {}).id;
+  const t = tables.find(x => x.id === state.tabla);
+  return `${T.intro ? `<p class="gp">${esc(T.intro)}</p>` : ""}
+    <div class="chips" role="toolbar" aria-label="Tabla">${tables.map(x => `<button class="chip" type="button" data-tabla="${esc(x.id)}" aria-pressed="${x.id === state.tabla}">${esc(String(x.title).replace(/\s*\(.*\)$/, ""))}</button>`).join("")}</div>
+    ${t ? blockHTML({t: "table", title: t.title, cols: t.cols, rows: t.rows, note: t.note}) : ""}
+    ${(T.tips || []).length ? `<h3 class="gsub">Tips</h3><ul class="tips">${T.tips.map(x => `<li>${esc(x)}</li>`).join("")}</ul>` : ""}
+    ${sourcesHTML(T.sources)}`;
 }
 
 /* ---------- gastos ---------- */
@@ -805,6 +1428,7 @@ window.addEventListener("scroll", () => { tip.hidden = true; }, {passive: true})
 /* ---------- render ---------- */
 
 function titleFor(){
+  if (state.place) return (byId[state.place] || {}).n || "Lugar";
   if (state.tab === "hoy") return "Hoy";
   if (state.tab === "ciudades") return (cityOf(state.city) || {}).es || "Ciudades";
   if (state.tab === "buscar") return "Buscar";
@@ -817,12 +1441,16 @@ function titleFor(){
 
 function render(){
   tip.hidden = true;
+  requestAnimationFrame(tickClock);
   document.querySelectorAll(".tab").forEach(t => {
     if (t.dataset.tab === state.tab) t.setAttribute("aria-current", "page"); else t.removeAttribute("aria-current");
   });
-  document.getElementById("back").hidden = !(state.tab === "mas" && state.sub);
+  const back = document.getElementById("back");
+  back.hidden = !(state.place || (state.tab === "mas" && state.sub));
+  back.setAttribute("aria-label", state.place ? "Regresar" : "Regresar a Más");
   document.getElementById("title").textContent = titleFor();
   const app = document.getElementById("app");
+  if (state.place) return renderPlace(app);
   if (state.tab === "hoy") return renderHoy(app);
   if (state.tab === "ciudades") return renderCity(app);
   if (state.tab === "buscar") return renderSearch(app);
@@ -839,7 +1467,10 @@ function scrollToId(id){
 
 /* ---------- events ---------- */
 
-document.getElementById("back").addEventListener("click", () => setView("mas"));
+document.getElementById("back").addEventListener("click", () => {
+  if (!state.place) return setView("mas");
+  if (history.state && history.state.place) history.back(); else closePlace();
+});
 
 document.addEventListener("input", e => {
   const t = e.target;
@@ -868,6 +1499,9 @@ document.addEventListener("change", e => {
 
 document.addEventListener("submit", e => {
   if (e.target.id === "gform"){ e.preventDefault(); addGasto(); }
+  if (e.target.id === "shopform"){ e.preventDefault(); addShop(); }
+  if (e.target.id === "tkform"){ e.preventDefault(); addTicket(); }
+  if (e.target.id === "paxform"){ e.preventDefault(); addPax(); }
 });
 
 document.addEventListener("click", e => {
@@ -879,6 +1513,59 @@ document.addEventListener("click", e => {
     if (tab === "buscar") requestAnimationFrame(() => { const f = document.getElementById("q"); if (f) f.focus(); });
     return;
   }
+  if ((x = el("[data-speak]"))){ speak(x.dataset.speak, x.dataset.lang); return; }
+  if ((x = el("[data-dish]"))){
+    const [cid, i] = x.dataset.dish.split("|");
+    const dish = ((GUIDE.food || {})[cid] || [])[Number(i)];
+    if (dish) openDish(dish);
+    return;
+  }
+  if ((x = el("[data-fcity]"))){ state.fcity = x.dataset.fcity; render(); return; }
+  if ((x = el("[data-food]"))){ state.fcity = x.dataset.food; setView("mas", {sub: "platillos"}); return; }
+  if ((x = el("[data-avoid]"))){
+    const a = new Set(store.get("rvc-avoid", []));
+    a.has(x.dataset.avoid) ? a.delete(x.dataset.avoid) : a.add(x.dataset.avoid);
+    store.set("rvc-avoid", [...a]);
+    render(); return;
+  }
+  if ((x = el("[data-pset]"))){ state.pset = x.dataset.pset; render(); return; }
+  if ((x = el("[data-show-ticket]"))){ showTicket(x.dataset.showTicket); return; }
+  if ((x = el("[data-save-ticket]"))){ saveTicket(x.dataset.saveTicket); return; }
+  if ((x = el("[data-del-ticket]"))){ delTicket(x.dataset.delTicket); return; }
+  if ((x = el("[data-pax-del]"))){ store.set("rvc-pax", store.get("rvc-pax", []).filter(p => p.id !== x.dataset.paxDel)); render(); return; }
+  if (el("[data-export]")){
+    const text = exportCode();
+    if (navigator.share) navigator.share({title: "Ruta Viral: viajeros y boletos", text}).catch(() => copyTo(text, "expmsg", "Código copiado"));
+    else copyTo(text, "expmsg", "Código copiado: pégalo en WhatsApp");
+    return;
+  }
+  if (el("[data-import]")){
+    const err = importCode((document.getElementById("imp") || {}).value);
+    if (!err) render();
+    const m = document.getElementById("impmsg");
+    if (m) m.textContent = err || "Importado";
+    return;
+  }
+  if ((x = el("[data-check]"))){
+    const all = store.get("rvc-check", {});
+    if (all[x.dataset.check]) delete all[x.dataset.check]; else all[x.dataset.check] = 1;
+    store.set("rvc-check", all);
+    render(); return;
+  }
+  if ((x = el("[data-mcity]"))){ state.mcity = x.dataset.mcity; render(); return; }
+  if ((x = el("[data-mapcity]"))){ state.mcity = x.dataset.mapcity; setView("mas", {sub: "cerca"}); return; }
+  if ((x = el("[data-mzoom]"))){ state.mzoom = Math.min(4, Math.max(1, (state.mzoom || 1) + Number(x.dataset.mzoom))); render(); return; }
+  if ((x = el("[data-tabla]"))){ state.tabla = x.dataset.tabla; render(); return; }
+  if (el("[data-locate]")){ locate(); return; }
+  if (el("[data-save-here]")){ saveHere(); return; }
+  if ((x = el("[data-shop-got]"))){
+    const items = store.get("rvc-shop", []);
+    const it = items.find(i => i.id === x.dataset.shopGot);
+    if (it) it.got = !it.got;
+    store.set("rvc-shop", items);
+    render(); return;
+  }
+  if ((x = el("[data-shop-del]"))){ store.set("rvc-shop", store.get("rvc-shop", []).filter(i => i.id !== x.dataset.shopDel)); render(); return; }
   if ((x = el("[data-day]"))){ goDay(x.dataset.day); return; }
   if ((x = el("[data-pick-city]"))){ setView("ciudades", {city: x.dataset.pickCity}); return; }
   if ((x = el("[data-sub]"))){ setView("mas", {sub: x.dataset.sub}); return; }
@@ -920,12 +1607,12 @@ document.addEventListener("click", e => {
   if ((x = el("[data-save-hotel]"))){ saveHotel(x.dataset.saveHotel); return; }
   if ((x = el("[data-gcard]"))){
     const it = GCARDS[Number(x.dataset.gcard)];
-    if (it) openCard({ask: "师傅，请带我去这里：", big: it.zh || it.h, where: it.addr, es: [it.h, it.tel].filter(Boolean).join(" · "), copy: [it.zh, it.addr].filter(Boolean).join(" "), map: mapURL([it.zh, it.addr].filter(Boolean).join(" "))});
+    if (it) openCard({ask: "师傅，请带我去这里：", big: it.zh || it.h, where: it.addr, es: [it.h, it.tel].filter(Boolean).join(" · "), copy: [it.zh, it.addr].filter(Boolean).join(" "), map: mapURL([it.zh, it.addr].filter(Boolean).join(" ")), speak: {text: it.zh || "", lang: langOf(it.zh)}});
     return;
   }
   if ((x = el("[data-say]"))){
     const s = SAY[Number(x.dataset.say)];
-    if (s) openCard({big: s.zh, where: s.py, es: s.es});
+    if (s) openCard({big: s.zh, where: s.py, es: s.es, speak: /X/.test(s.zh) ? null : {text: s.zh, lang: langOf(s.zh)}});
     return;
   }
   if (el("[data-install]") && deferredPrompt){
@@ -944,7 +1631,7 @@ document.addEventListener("click", e => {
 let touch0 = null;
 const appEl = document.getElementById("app");
 appEl.addEventListener("touchstart", e => {
-  if (state.tab !== "hoy" || e.touches.length !== 1 || e.target.closest(".strip, .daystrip")){ touch0 = null; return; }
+  if (state.place || state.tab !== "hoy" || e.touches.length !== 1 || e.target.closest(".strip, .daystrip, .rail")){ touch0 = null; return; }
   touch0 = {x: e.touches[0].clientX, y: e.touches[0].clientY};
 }, {passive: true});
 appEl.addEventListener("touchend", e => {
@@ -966,9 +1653,16 @@ const da = document.getElementById("da");
 const dn = document.getElementById("dn");
 const dmap = document.getElementById("dmap");
 const dcopy = document.getElementById("dcopy");
+const dimg = document.getElementById("dimg");
+const dsay = document.getElementById("dsay");
 let copyText = "";
+let sayNow = null;
 
-function openCard({ask, big, where, es, copy, map}){
+function openCard({ask, big, where, es, copy, map, speak: sp, img}){
+  dimg.hidden = !img;
+  if (img) dimg.src = img; else dimg.removeAttribute("src");
+  sayNow = sp && sp.text && canSpeak ? sp : null;
+  dsay.hidden = !sayNow;
   dAsk.hidden = !ask;
   if (ask){ dAsk.textContent = ask; dAsk.lang = langOf(ask); }
   dz.textContent = big || ""; dz.lang = langOf(big);
@@ -990,13 +1684,14 @@ function openDriver(p){
   openCard({
     ask: ko ? "기사님, 여기로 가 주세요:" : "师傅，请带我去这里：",
     big: p.z, where: p.a, es: p.n + " · " + c.es, copy: full,
-    map: ko ? "https://map.naver.com/p/search/" + encodeURIComponent(p.z) : mapURL(full)
+    map: ko ? "https://map.naver.com/p/search/" + encodeURIComponent(p.z) : mapURL(full),
+    speak: {text: p.z, lang: ko ? "ko" : "zh"}
   });
 }
 
 function openTransfer(tr){
   if (!tr) return;
-  openCard({ask: "师傅，请带我去这里：", big: tr.z, where: transferLabel(tr), es: tr.n, copy: tr.z, map: mapURL(tr.z)});
+  openCard({ask: "师傅，请带我去这里：", big: tr.z, where: transferLabel(tr), es: tr.n, copy: tr.z, map: mapURL(tr.z), speak: {text: tr.z, lang: "zh"}});
 }
 
 function openHotel(cid){
@@ -1015,7 +1710,8 @@ function openHotel(cid){
   openCard({
     ask: ko ? "기사님, 이 호텔로 가 주세요:" : "师傅，请带我回这个酒店：",
     big: h.z || h.n, where: h.a, es: [h.n, c.es, h.t].filter(Boolean).join(" · "),
-    copy: full, map: ko ? "https://map.naver.com/p/search/" + encodeURIComponent(h.z || h.n) : mapURL(c.sc + " " + full)
+    copy: full, map: ko ? "https://map.naver.com/p/search/" + encodeURIComponent(h.z || h.n) : mapURL(c.sc + " " + full),
+    speak: {text: h.z || "", lang: ko ? "ko" : "zh"}
   });
 }
 
@@ -1029,7 +1725,11 @@ function saveHotel(cid){
   document.getElementById("hmsg-" + cid).textContent = "Guardado";
 }
 
-document.getElementById("dclose").addEventListener("click", () => dlg.close ? dlg.close() : dlg.removeAttribute("open"));
+document.getElementById("dclose").addEventListener("click", () => {
+  if (canSpeak) speechSynthesis.cancel();
+  dlg.close ? dlg.close() : dlg.removeAttribute("open");
+});
+dsay.addEventListener("click", () => { if (sayNow) speak(sayNow.text, sayNow.lang); });
 dcopy.addEventListener("click", async () => {
   if (!copyText) return;
   try{ await navigator.clipboard.writeText(copyText); dcopy.textContent = "Copiado"; }
