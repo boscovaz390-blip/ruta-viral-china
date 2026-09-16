@@ -37,7 +37,17 @@ function todayISO(){
 const tripDay = () => TRIP.days.find(d => d.date === todayISO());
 const afterNoon = () => new Date().getHours() >= 12;
 const hotelCityFor = d => d.to && afterNoon() ? d.to : d.city;
-const hotels = () => Object.assign({}, TRIP.hotels || {}, store.get("rvc-hotels", {}));
+// lo que capture el usuario gana campo por campo; un campo en blanco no borra el dato de su reserva
+function hotels(){
+  const out = Object.assign({}, TRIP.hotels || {});
+  const mine = store.get("rvc-hotels", {});
+  Object.keys(mine).forEach(c => {
+    const filled = {};
+    Object.entries(mine[c] || {}).forEach(([k, v]) => { if (v !== "" && v != null) filled[k] = v; });
+    out[c] = Object.assign({}, out[c], filled);
+  });
+  return out;
+}
 
 /* ---------- navigation state ---------- */
 
@@ -2074,7 +2084,7 @@ function saveHotel(cid){
   // keep the booking data (dates, confirmation) that came with the trip
   all[cid] = Object.assign({}, (TRIP.hotels || {})[cid], {n: val("n"), z: val("z"), a: val("a"), t: val("t")});
   store.set("rvc-hotels", all);
-  const h = all[cid];
+  const h = hotels()[cid] || {}; // lo efectivo: lo tuyo sobre lo que trae la reserva
   document.getElementById("hsum-" + cid).textContent = h.n || h.z || h.a ? (h.n || h.z) : "Sin capturar";
   document.getElementById("hmsg-" + cid).textContent = "Guardado";
 }
