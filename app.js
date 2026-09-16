@@ -182,13 +182,21 @@ function entryHTML(p, withCity){
   </article>`;
 }
 
+// qué tan lejos queda de donde duermes (o de ti, si diste tu ubicación)
+function distLabel(p){
+  if (!p || !p.ll) return "";
+  const o = originFor(p.c);
+  return o ? `${fmtKm(distKm(o.pt, p.ll))} de ${o.label}` : "";
+}
+
 function recHTML(p){
   const img = p.ph || p.pp;
+  const dl = distLabel(p);
   return `<article class="rcard k-${esc(p.k)}">
     <button class="rc-open" type="button" data-open="${p.id}">
       ${img ? `<img src="${esc(img.file)}" alt="${esc(img.alt || p.n)}" loading="lazy" decoding="async">` : coverFill(p)}
       <span class="cat">${esc(CATS[p.k])}</span>
-      <span class="rc-txt"><b class="rec-title">${esc(p.n)}</b><span class="zh" lang="${langOf(p.z)}">${esc(p.z)}</span>${p.p ? `<span class="rc-price">${esc(p.p)}</span>` : ""}</span>
+      <span class="rc-txt"><b class="rec-title">${esc(p.n)}</b><span class="zh" lang="${langOf(p.z)}">${esc(p.z)}</span>${dl ? `<span class="rc-dist">${esc(dl)}</span>` : ""}${p.p ? `<span class="rc-price">${esc(p.p)}</span>` : ""}</span>
     </button>
     ${favHTML(p)}
     <button class="go" type="button" data-go="${p.id}" aria-label="Mostrar ${esc(p.n)} al chofer">Ir</button>
@@ -416,11 +424,12 @@ function renderVirales(app){
 
 function vcardHTML(p, withCity){
   const img = p.ph || p.pp;
+  const dl = distLabel(p);
   return `<article class="vcard k-${esc(p.k)}">
     <button class="vc-open" type="button" data-open="${p.id}" aria-label="Ver ${esc(p.n)}">
       ${img ? `<img src="${esc(img.file)}" alt="${esc(img.alt || p.n)}" loading="lazy" decoding="async">` : `<span class="vnoimg">${cityCode(cityOf(p.c))}</span>`}
       <span class="vcity">${withCity ? cityCode(cityOf(p.c)) : esc(CATS[p.k].split(/[ ,]/)[0])}</span>
-      <span class="vbody"><b class="vtitle">${esc(p.n)}</b><span class="zh" lang="${langOf(p.z)}">${esc(p.z)}</span>${p.v ? `<span class="vwhy">${esc(p.v)}</span>` : p.p ? `<span class="vwhy price">${esc(p.p)}</span>` : ""}</span>
+      <span class="vbody">${dl ? `<span class="vdist">${esc(dl)}</span>` : ""}<b class="vtitle">${esc(p.n)}</b><span class="zh" lang="${langOf(p.z)}">${esc(p.z)}</span>${p.v ? `<span class="vwhy">${esc(p.v)}</span>` : p.p ? `<span class="vwhy price">${esc(p.p)}</span>` : ""}</span>
     </button>
     ${favHTML(p)}
   </article>`;
@@ -1157,7 +1166,7 @@ function cercaHTML(){
   const origin = originFor(cid);
   const rows = P.filter(p => p.c === cid && p.ll).map(p => ({p, d: origin ? distKm(origin.pt, p.ll) : null}));
   if (origin) rows.sort((a, b) => a.d - b.d);
-  return `<p class="gp">El GPS funciona sin internet. Toca "Usar mi ubicación" y los lugares se ordenan por cercanía; estando en tu hotel, guárdalo para ver qué te queda cerca aunque salgas. Distancias en línea recta.</p>
+  return `<p class="gp">Las distancias salen desde el hotel de tu reserva. Toca "Usar mi ubicación" para medirlas desde donde estés: el GPS funciona sin internet. Distancias en línea recta.</p>
     <div class="row"><button class="btn primary" type="button" data-locate>${HERE ? "Actualizar ubicación" : "Usar mi ubicación"}</button>${HERE && nearestCity([HERE.lat, HERE.lng]) ? `<button class="btn" type="button" data-save-here>Guardar aquí como mi hotel</button>` : ""}</div>
     <p class="saved-msg" id="locmsg" aria-live="polite">${origin ? `Distancias desde ${origin.label}.` : ""}</p>
     ${cityChips(ids, "data-mcity", cid)}
