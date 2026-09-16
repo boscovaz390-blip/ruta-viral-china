@@ -525,6 +525,7 @@ window.addEventListener("popstate", () => {
 const TOPICS = {
   "ahora": {g: "viaje", icon: "clock", label: "¿Qué hago ahora?", desc: "Lo abierto y cerca según la hora"},
   "boletos": {g: "viaje", icon: "ticket", label: "Mis boletos", desc: "Vuelos y trenes en grande"},
+  "reservar-cuando": {g: "viaje", icon: "cal", label: "Qué reservar y cuándo", desc: "Fechas límite antes de volar"},
   "reservas": {g: "viaje", icon: "cal", label: "Reservaciones", desc: "Qué reservar y cómo"},
   "viajeros": {g: "viaje", icon: "people", label: "Viajeros", desc: "Quién va y su asiento"},
   "hoteles": {g: "viaje", icon: "door", label: "Mis hoteles", desc: "Captura tus hoteles para el chofer"},
