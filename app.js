@@ -199,14 +199,25 @@ function distLabel(p){
   return o ? `${fmtKm(distKm(o.pt, p.ll))} de ${o.label}` : "";
 }
 
+// "abre más tarde" es informativo (ámbar); "cierra hoy" o "cerrado" sí es alarma (rojo)
+const softShut = label => /^abre/i.test(label) ? " soft" : "";
+
+// solo avisa lo que conviene saber antes de ir: cerrado ahora, o cierra hoy
+function shutLabel(p){
+  if (!p || !p.h) return "";
+  const st = openState(p, cityNow(p.c));
+  return st.open === false ? st.label : "";
+}
+
 function recHTML(p){
   const img = p.ph || p.pp;
   const dl = distLabel(p);
+  const sl = shutLabel(p);
   return `<article class="rcard k-${esc(p.k)}">
     <button class="rc-open" type="button" data-open="${p.id}">
       ${img ? `<img src="${esc(img.file)}" alt="${esc(img.alt || p.n)}" loading="lazy" decoding="async">` : coverFill(p)}
       <span class="cat">${esc(CATS[p.k])}</span>
-      <span class="rc-txt"><b class="rec-title">${esc(p.n)}</b><span class="zh" lang="${langOf(p.z)}">${esc(p.z)}</span>${dl ? `<span class="rc-dist">${esc(dl)}</span>` : ""}${p.p ? `<span class="rc-price">${esc(p.p)}</span>` : ""}</span>
+      <span class="rc-txt"><b class="rec-title">${esc(p.n)}</b><span class="zh" lang="${langOf(p.z)}">${esc(p.z)}</span>${sl ? `<span class="shut${softShut(sl)}">${esc(sl)}</span>` : ""}${dl ? `<span class="rc-dist">${esc(dl)}</span>` : ""}${p.p ? `<span class="rc-price">${esc(p.p)}</span>` : ""}</span>
     </button>
     ${favHTML(p)}
     <button class="go" type="button" data-go="${p.id}" aria-label="Mostrar ${esc(p.n)} al chofer">Ir</button>
@@ -435,11 +446,12 @@ function renderVirales(app){
 function vcardHTML(p, withCity){
   const img = p.ph || p.pp;
   const dl = distLabel(p);
+  const sl = shutLabel(p);
   return `<article class="vcard k-${esc(p.k)}">
     <button class="vc-open" type="button" data-open="${p.id}" aria-label="Ver ${esc(p.n)}">
       ${img ? `<img src="${esc(img.file)}" alt="${esc(img.alt || p.n)}" loading="lazy" decoding="async">` : `<span class="vnoimg">${cityCode(cityOf(p.c))}</span>`}
       <span class="vcity">${withCity ? cityCode(cityOf(p.c)) : esc(CATS[p.k].split(/[ ,]/)[0])}</span>
-      <span class="vbody">${dl ? `<span class="vdist">${esc(dl)}</span>` : ""}<b class="vtitle">${esc(p.n)}</b><span class="zh" lang="${langOf(p.z)}">${esc(p.z)}</span>${p.v ? `<span class="vwhy">${esc(p.v)}</span>` : p.p ? `<span class="vwhy price">${esc(p.p)}</span>` : ""}</span>
+      <span class="vbody">${sl ? `<span class="vshut${softShut(sl)}">${esc(sl)}</span>` : ""}${dl ? `<span class="vdist">${esc(dl)}</span>` : ""}<b class="vtitle">${esc(p.n)}</b><span class="zh" lang="${langOf(p.z)}">${esc(p.z)}</span>${p.v ? `<span class="vwhy">${esc(p.v)}</span>` : p.p ? `<span class="vwhy price">${esc(p.p)}</span>` : ""}</span>
     </button>
     ${favHTML(p)}
   </article>`;
@@ -528,6 +540,9 @@ const TOPICS = {
   "compras-lista": {g: "compras", icon: "cart", label: "Lista de compras", desc: "Con tu precio meta"},
   "regateo": {g: "compras", icon: "percent", label: "Regateo", desc: "Calculadora y frases"},
   "replicas": {g: "compras", icon: "copy", label: "Réplicas", desc: "Calidades y precios reales"},
+  "chamarras": {g: "compras", icon: "copy", label: "Chamarras réplica", desc: "Dónde, precio meta y cómo revisarlas"},
+  "tenis": {g: "compras", icon: "bag", label: "Tenis de imitación", desc: "Mercados, precios y cómo checarlos"},
+  "plumas": {g: "compras", icon: "shirt", label: "Chamarras de plumón", desc: "Marcas chinas buenas y de verdad"},
   "que-comprar": {g: "compras", icon: "bag", label: "Qué comprar", desc: "Y qué no, en ropa y tecnología"},
   "marcas": {g: "compras", icon: "star", label: "Marcas chinas", desc: "Deportivas, moda y outdoor"},
   "tallas": {g: "compras", icon: "shirt", label: "Tallas", desc: "China, Corea y México"},
