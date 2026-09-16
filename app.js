@@ -345,6 +345,8 @@ function renderHoy(app){
 
     ${spentDay.length ? `<div class="day-gastos"><span>Gastaste este día</span><b>${fmtMXN(sumBy(spentDay, toMXN))} MXN</b></div>` : ""}
 
+    ${hotelNowHTML(here)}
+
     <h2 class="lbl">Hora ahora</h2>
     ${clockHTML()}
 
@@ -357,6 +359,24 @@ function renderHoy(app){
     </div>`;
 
   requestAnimationFrame(() => centerPressed("daystrip"));
+}
+
+// tonight's hotel on the day view: name, dates, confirmation and one tap to show the driver
+function hotelNowHTML(c){
+  if (!c) return "";
+  const h = hotels()[c.id] || {};
+  if (!h.z && !h.a && !h.n) return "";
+  return `<h2 class="lbl">Dónde duermes</h2>
+    <div class="hnow">
+      <b>${esc(h.n || h.z)}</b>
+      ${h.z && h.n ? `<div class="zh" lang="${c.id === "se" ? "ko" : "zh"}">${esc(h.z)}</div>` : ""}
+      ${h.a ? `<div class="hnow-a" lang="${c.id === "se" ? "ko" : "zh"}">${esc(h.a)}</div>` : ""}
+      ${stayHTML(h)}
+      <div class="row">
+        <button class="btn primary" type="button" data-hotel="${c.id}">Mostrar al chofer</button>
+        ${h.t ? `<a class="btn" href="tel:${esc(String(h.t).replace(/[^+\d]/g, ""))}">Llamar</a>` : ""}
+      </div>
+    </div>`;
 }
 
 function goDay(date){
@@ -517,15 +537,29 @@ function transfersHTML(){
     </div>`).join("")}</div>`;
 }
 
+// dates + confirmation code that came with the booking, when the trip data has them
+function stayHTML(h){
+  if (!h || (!h.in && !h.conf)) return "";
+  const when = h.in && h.out ? `${h.in} → ${h.out}` : "";
+  const nights = h.nights ? `${h.nights} ${h.nights === 1 ? "noche" : "noches"}` : "";
+  const rooms = h.rooms > 1 ? `${h.rooms} habitaciones` : "";
+  const codes = [].concat(h.conf || []).filter(Boolean);
+  return `<p class="stay">
+    ${when ? `<b>${esc(when)}</b>` : ""}${nights ? `<span>${esc(nights)}</span>` : ""}${rooms ? `<span>${esc(rooms)}</span>` : ""}
+  </p>
+  ${codes.length ? `<p class="stay conf">Confirmación ${codes.map(esc).join(" · ")}${h.holder ? ` · a nombre de ${esc(h.holder)}` : ""}</p>` : ""}`;
+}
+
 function hotelsEditorHTML(){
   const H = hotels();
   return `<p class="gp">Pega el nombre y la dirección que vienen en tu confirmación de reserva (en chino o coreano), o pídeselos a WildChina. Se guardan solo en este teléfono y funcionan sin internet.</p>
   <div class="hotels">${CITIES.map(c => {
     const h = H[c.id] || {};
-    const has = h.z || h.a;
+    const has = h.n || h.z || h.a;
     return `<details class="hotel" id="hotel-${c.id}">
       <summary><b>${esc(c.es)}</b><span class="hs" id="hsum-${c.id}">${has ? esc(h.n || h.z) : "Sin capturar"}</span></summary>
       <div class="hform">
+        ${stayHTML(h)}
         <label for="h-${c.id}-n">Nombre del hotel</label>
         <input id="h-${c.id}-n" value="${esc(h.n || "")}" placeholder="Ej. Hotel Éclat" autocomplete="off">
         <label for="h-${c.id}-z">Nombre en el idioma local</label>
@@ -1076,7 +1110,8 @@ function nearestCity(pt){
 
 function originFor(cid){
   if (HERE && nearestCity([HERE.lat, HERE.lng]) === cid) return {pt: [HERE.lat, HERE.lng], label: "tu ubicación"};
-  const saved = store.get("rvc-hotel-ll", {})[cid];
+  // lo que guardó el usuario gana; si no, las coordenadas del hotel de su reserva
+  const saved = store.get("rvc-hotel-ll", {})[cid] || (hotels()[cid] || {}).ll;
   return saved ? {pt: saved, label: "tu hotel"} : null;
 }
 
@@ -2027,10 +2062,11 @@ function openHotel(cid){
 function saveHotel(cid){
   const val = k => (document.getElementById(`h-${cid}-${k}`) || {}).value?.trim() || "";
   const all = store.get("rvc-hotels", {});
-  all[cid] = {n: val("n"), z: val("z"), a: val("a"), t: val("t")};
+  // keep the booking data (dates, confirmation) that came with the trip
+  all[cid] = Object.assign({}, (TRIP.hotels || {})[cid], {n: val("n"), z: val("z"), a: val("a"), t: val("t")});
   store.set("rvc-hotels", all);
   const h = all[cid];
-  document.getElementById("hsum-" + cid).textContent = h.z || h.a ? (h.n || h.z) : "Sin capturar";
+  document.getElementById("hsum-" + cid).textContent = h.n || h.z || h.a ? (h.n || h.z) : "Sin capturar";
   document.getElementById("hmsg-" + cid).textContent = "Guardado";
 }
 

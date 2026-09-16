@@ -636,3 +636,13 @@ dialog#driver::backdrop{background:#fff}
   .vgrid{grid-template-columns:repeat(3,minmax(0,1fr))}
 }
 @media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
+
+/* hotel: booking dates + tonight's hotel on the day view */
+.stay{display:flex;flex-wrap:wrap;gap:4px 10px;align-items:baseline;margin:0 0 4px;font-size:13px;color:var(--muted);font-weight:600}
+.stay b{font-size:14px;color:var(--ink);font-weight:800}
+.hnow{border-radius:22px;background:var(--surface);box-shadow:var(--e1);padding:16px;display:grid;gap:4px}
+.hnow>b{font-family:var(--display);font-size:19px;line-height:1.15}
+.hnow .zh{font-size:17px;font-weight:700}
+.hnow-a{font-size:14px;color:var(--muted);line-height:1.35}
+.hnow .row{margin-top:8px}
+.stay.conf{margin-top:-2px;font-size:12.5px;font-weight:600}
