@@ -1326,7 +1326,8 @@ function openState(p, at){
   if (!h) return {open: null, label: ""};
   const names = ["domingo", "lunes", "martes", "miercoles", "jueves", "viernes", "sabado"];
   const today = names[at.dow];
-  if (new RegExp(`(cierra|cerrado)s? (los )?${today}|${today} cerrado`).test(norm(h))) return {open: false, label: `Cierra los ${today.replace("miercoles", "miércoles").replace("sabado", "sábado")}`};
+  const PLURAL = {domingo: "domingos", sabado: "sábados", miercoles: "miércoles"};
+  if (new RegExp(`(cierra|cerrado)s? (los )?${today}|${today} cerrado`).test(norm(h))) return {open: false, label: `Cierra los ${PLURAL[today] || today}`};
   const segs = h.split(/[;·]/).filter(x => /\d{1,2}:\d{2}/.test(x)).map(x => ({x, days: segDays(x)}));
   if (!segs.length) return {open: null, label: ""};
   const seg = (segs.find(t => t.days && t.days.includes(at.dow)) || segs.find(t => !t.days && !/resto/.test(norm(t.x))) || segs.find(t => /resto/.test(norm(t.x))) || segs[0]).x;
