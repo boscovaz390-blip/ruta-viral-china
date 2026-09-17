@@ -252,11 +252,6 @@ function renderCity(app){
     ${heroHTML(banner && banner.ph, {kick: `${c.dates} · ${all.length} lugares`, title: c.es, label: banner && banner.n, code: cityCode(c)})}
     <p class="intro">${esc(c.intro)}</p>
 
-    ${(c.slots || []).length ? `<h2 class="lbl">Tus ratos libres</h2>
-    <ul class="slots">
-      ${c.slots.map(s => `<li class="slot"><span class="d">${esc(s[0])}<small>${esc(s[1])}</small></span><p>${esc(s[2])}</p></li>`).join("")}
-    </ul>` : ""}
-    ${(c.notes || []).length ? `<div class="notes"><ul>${c.notes.map(n => `<li>${esc(n)}</li>`).join("")}</ul></div>` : ""}
     ${((GUIDE.food || {})[c.id] || []).length ? `<button class="hint food-hint" type="button" data-food="${c.id}"><b>Señala y pide en ${esc(c.es)}</b> · ${GUIDE.food[c.id].length} platillos con foto para enseñar al mesero →</button>` : ""}
     ${all.some(p => p.ll) ? `<button class="hint map-hint" type="button" data-mapcity="${c.id}"><b>Mapa y cerca de mí</b> · qué te queda cerca con el GPS, sin internet →</button>` : ""}
 
@@ -267,7 +262,13 @@ function renderCity(app){
     ${shown.length ? `<div class="vgrid">${shown.map(p => vcardHTML(p, false)).join("")}</div>`
       : `<p class="empty">${state.cat === "fav" ? "Todavía no guardas lugares en esta ciudad. Toca ☆ en los que quieras tener a la mano."
           : state.cat === "open" ? `Nada abierto a esta hora en ${esc(c.es)}. Toca Todo para ver la lista completa.`
-          : "Nada en esta categoría."}</p>`}`;
+          : "Nada en esta categoría."}</p>`}
+
+    ${(c.slots || []).length ? `<h2 class="lbl">Tus ratos libres</h2>
+    <ul class="slots">
+      ${c.slots.map(s => `<li class="slot"><span class="d">${esc(s[0])}<small>${esc(s[1])}</small></span><p>${esc(s[2])}</p></li>`).join("")}
+    </ul>` : ""}
+    ${(c.notes || []).length ? `<h2 class="lbl">Ojo en ${esc(c.es)}</h2><div class="notes"><ul>${c.notes.map(n => `<li>${esc(n)}</li>`).join("")}</ul></div>` : ""}`;
 
   requestAnimationFrame(() => centerPressed("citypick"));
 }
@@ -463,11 +464,14 @@ function vcardHTML(p, withCity){
   const img = p.ph || p.pp;
   const dl = distLabel(p);
   const sl = shutLabel(p);
+  // una sola etiqueta de estado por tarjeta: "ya fuiste" manda sobre "cerrado"
+  const estado = seen.has(p.id) ? `<span class="vseen">✓ Ya fuiste</span>`
+    : sl ? `<span class="vshut${softShut(sl)}">${esc(sl)}</span>` : "";
   return `<article class="vcard k-${esc(p.k)}${seen.has(p.id) ? " is-seen" : ""}">
     <button class="vc-open" type="button" data-open="${p.id}" aria-label="Ver ${esc(p.n)}">
       ${img ? `<img src="${esc(img.file)}" alt="${esc(img.alt || p.n)}" loading="lazy" decoding="async">` : `<span class="vnoimg">${cityCode(cityOf(p.c))}</span>`}
       <span class="vcity">${withCity ? cityCode(cityOf(p.c)) : esc(CATS[p.k].split(/[ ,]/)[0])}</span>
-      <span class="vbody">${seen.has(p.id) ? `<span class="vseen">✓ Ya fuiste</span>` : ""}${sl ? `<span class="vshut${softShut(sl)}">${esc(sl)}</span>` : ""}${dl ? `<span class="vdist">${esc(dl)}</span>` : ""}<b class="vtitle">${esc(p.n)}</b><span class="zh" lang="${langOf(p.z)}">${esc(p.z)}</span>${p.v ? `<span class="vwhy">${esc(p.v)}</span>` : p.p ? `<span class="vwhy price">${esc(p.p)}</span>` : ""}</span>
+      <span class="vbody">${estado}${dl ? `<span class="vdist">${esc(dl)}</span>` : ""}<b class="vtitle">${esc(p.n)}</b><span class="zh" lang="${langOf(p.z)}">${esc(p.z)}</span>${estado ? "" : p.v ? `<span class="vwhy">${esc(p.v)}</span>` : p.p ? `<span class="vwhy price">${esc(p.p)}</span>` : ""}</span>
     </button>
     ${favHTML(p)}
   </article>`;
