@@ -227,12 +227,15 @@ function recHTML(p){
 function renderCity(app){
   const c = cityOf(state.city) || CITIES[0];
   const all = P.filter(p => p.c === c.id);
-  const counts = {all: all.length, fav: all.filter(p => favs.has(p.id)).length};
+  // "abierto ahora" usa la hora de esa ciudad, no la tuya
+  const abierto = p => p.h && openState(p, cityNow(c.id)).open === true;
+  const counts = {all: all.length, fav: all.filter(p => favs.has(p.id)).length, open: all.filter(abierto).length};
   Object.keys(CATS).forEach(k => counts[k] = all.filter(p => p.k === k).length);
   const shown = state.cat === "all" ? all
     : state.cat === "fav" ? all.filter(p => favs.has(p.id))
+    : state.cat === "open" ? all.filter(abierto)
     : all.filter(p => p.k === state.cat);
-  const chipDefs = [["all", "Todo"], ...Object.entries(CATS), ["fav", "★ Guardados"]]
+  const chipDefs = [["all", "Todo"], ["open", "Abierto ahora"], ...Object.entries(CATS), ["fav", "★ Guardados"]]
     .filter(([k]) => k === "all" || k === "fav" || counts[k] > 0);
   const banner = all.find(p => p.ph && p.ph.kind === "lugar" && p.k === "noc") || all.find(p => p.ph && p.ph.kind === "lugar");
 
@@ -259,7 +262,9 @@ function renderCity(app){
       ${chipDefs.map(([k, l]) => `<button class="chip" type="button" data-cat="${k}" aria-pressed="${state.cat === k}">${esc(l)}<span>${counts[k]}</span></button>`).join("")}
     </div>
     ${shown.length ? `<div class="vgrid">${shown.map(p => vcardHTML(p, false)).join("")}</div>`
-      : `<p class="empty">${state.cat === "fav" ? "Todavía no guardas lugares en esta ciudad. Toca ☆ en los que quieras tener a la mano." : "Nada en esta categoría."}</p>`}`;
+      : `<p class="empty">${state.cat === "fav" ? "Todavía no guardas lugares en esta ciudad. Toca ☆ en los que quieras tener a la mano."
+          : state.cat === "open" ? `Nada abierto a esta hora en ${esc(c.es)}. Toca Todo para ver la lista completa.`
+          : "Nada en esta categoría."}</p>`}`;
 
   requestAnimationFrame(() => centerPressed("citypick"));
 }
