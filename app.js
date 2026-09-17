@@ -439,6 +439,9 @@ function renderVirales(app){
     : state.vcat === "open" ? scoped.filter(abiertoAhora)
     : scoped.filter(p => p.k === state.vcat);
   const cats = Object.entries(CATS).filter(([k]) => scoped.some(p => p.k === k));
+  // de a 24: la lista completa eran 36 pantallas de scroll sin un solo corte
+  const tope = state.vmore || 24;
+  const visibles = shown.slice(0, tope);
   app.innerHTML = `
     <section class="page-head">
       <span class="sticker">TikTok · Instagram · Xiaohongshu</span>
@@ -454,7 +457,10 @@ function renderVirales(app){
       ${scoped.some(abiertoAhora) ? `<button class="chip" type="button" data-vcat="open" aria-pressed="${state.vcat === "open"}">Abierto ahora</button>` : ""}
       ${cats.map(([k, l]) => `<button class="chip" type="button" data-vcat="${k}" aria-pressed="${state.vcat === k}">${esc(l)}</button>`).join("")}
     </div>
-    ${shown.length ? `<div class="vgrid">${shown.map(p => vcardHTML(p, true)).join("")}</div>` : `<p class="empty">Nada viral con este filtro.</p>`}
+    ${shown.length ? `<div class="vgrid">${visibles.map(p => vcardHTML(p, true)).join("")}</div>
+      ${shown.length > tope ? `<div class="row more-row"><button class="btn primary" type="button" data-vmore>Ver más · faltan ${shown.length - tope}</button></div>`
+        : shown.length > 24 ? `<p class="fine">Ya viste los ${shown.length}.</p>` : ""}`
+      : `<p class="empty">Nada viral con este filtro.</p>`}
     <p class="fine">Lo viral sale de guías y blogs que citan TikTok, Douyin, Xiaohongshu o Instagram. Toca una tarjeta para ver imperdibles, precios y cómo llegar.</p>`;
 }
 
@@ -1972,8 +1978,15 @@ document.addEventListener("click", e => {
   if ((x = el("[data-open]"))){ openPlace(x.dataset.open); return; }
   if ((x = el("[data-suggest]"))){ state.q = x.dataset.suggest; renderSearch(document.getElementById("app")); return; }
   if ((x = el("[data-cat]"))){ state.cat = x.dataset.cat; render(); return; }
-  if ((x = el("[data-vcity]"))){ state.vcity = x.dataset.vcity; render(); return; }
-  if ((x = el("[data-vcat]"))){ state.vcat = x.dataset.vcat; render(); return; }
+  if ((x = el("[data-vcity]"))){ state.vcity = x.dataset.vcity; state.vmore = 0; render(); window.scrollTo({top: 0}); return; }
+  if ((x = el("[data-vcat]"))){ state.vcat = x.dataset.vcat; state.vmore = 0; render(); window.scrollTo({top: 0}); return; }
+  if (el("[data-vmore]")){
+    const y = window.scrollY;
+    state.vmore = (state.vmore || 24) + 24;
+    render();
+    window.scrollTo({top: y});   // no te devuelve al principio al traer más
+    return;
+  }
   if ((x = el("[data-gcity]"))){ state.gcity = x.dataset.gcity; state.gdel = null; render(); return; }
   if ((x = el("[data-gdel]"))){
     const id = x.dataset.gdel;
