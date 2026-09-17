@@ -20,6 +20,7 @@ const store = {
   set(k, v){ try{ localStorage.setItem(k, JSON.stringify(v)); }catch(e){} }
 };
 let favs = new Set(store.get("rvc-favs", []));
+let seen = new Set(store.get("rvc-seen", []));   // los que ya visitaste
 let gastos = store.get("rvc-gastos", []);
 
 const esc = s => String(s ?? "").replace(/[&<>"]/g, ch => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[ch]));
@@ -229,13 +230,15 @@ function renderCity(app){
   const all = P.filter(p => p.c === c.id);
   // "abierto ahora" usa la hora de esa ciudad, no la tuya
   const abierto = p => p.h && openState(p, cityNow(c.id)).open === true;
-  const counts = {all: all.length, fav: all.filter(p => favs.has(p.id)).length, open: all.filter(abierto).length};
+  const counts = {all: all.length, fav: all.filter(p => favs.has(p.id)).length,
+                  open: all.filter(abierto).length, seen: all.filter(p => seen.has(p.id)).length};
   Object.keys(CATS).forEach(k => counts[k] = all.filter(p => p.k === k).length);
   const shown = state.cat === "all" ? all
     : state.cat === "fav" ? all.filter(p => favs.has(p.id))
     : state.cat === "open" ? all.filter(abierto)
+    : state.cat === "seen" ? all.filter(p => seen.has(p.id))
     : all.filter(p => p.k === state.cat);
-  const chipDefs = [["all", "Todo"], ["open", "Abierto ahora"], ...Object.entries(CATS), ["fav", "★ Guardados"]]
+  const chipDefs = [["all", "Todo"], ["open", "Abierto ahora"], ...Object.entries(CATS), ["fav", "★ Guardados"], ["seen", "✓ Ya fui"]]
     .filter(([k]) => k === "all" || k === "fav" || counts[k] > 0);
   const banner = all.find(p => p.ph && p.ph.kind === "lugar" && p.k === "noc") || all.find(p => p.ph && p.ph.kind === "lugar");
 
@@ -303,9 +306,13 @@ function renderResults(){
     return;
   }
   const hits = P.filter(p => [p.n, p.z, p.a, p.d, p.t, p.v, CATS[p.k], cityOf(p.c).es, ...(Array.isArray(p.m) ? p.m : [p.m])].some(f => norm(f).includes(q)));
+  const abiertos = hits.filter(p => p.h && openState(p, cityNow(p.c)).open === true);
+  const list = state.qopen ? abiertos : hits;
   box.innerHTML = `
-    <h2 class="lbl">${hits.length} ${hits.length === 1 ? "resultado" : "resultados"}</h2>
-    ${hits.length ? `<div class="vgrid">${hits.map(p => vcardHTML(p, true)).join("")}</div>`
+    <h2 class="lbl">${list.length} ${list.length === 1 ? "resultado" : "resultados"}</h2>
+    ${abiertos.length && abiertos.length < hits.length ? `<div class="chips" role="toolbar" aria-label="Filtrar resultados">
+      <button class="chip" type="button" data-qopen aria-pressed="${!!state.qopen}">Abierto ahora<span>${abiertos.length}</span></button></div>` : ""}
+    ${list.length ? `<div class="vgrid">${list.map(p => vcardHTML(p, true)).join("")}</div>`
       : `<p class="empty">Nada con “${esc(state.q)}”. Prueba con el nombre en chino o con una palabra como “pato”, “réplicas” o “bar”.</p>`}`;
 }
 
@@ -426,7 +433,10 @@ function goDay(date){
 function renderVirales(app){
   const pool = P.filter(p => p.ig || p.v);
   const scoped = state.vcity === "all" ? pool : pool.filter(p => p.c === state.vcity);
-  const shown = state.vcat === "all" ? scoped : scoped.filter(p => p.k === state.vcat);
+  const abiertoAhora = p => p.h && openState(p, cityNow(p.c)).open === true;
+  const shown = state.vcat === "all" ? scoped
+    : state.vcat === "open" ? scoped.filter(abiertoAhora)
+    : scoped.filter(p => p.k === state.vcat);
   const cats = Object.entries(CATS).filter(([k]) => scoped.some(p => p.k === k));
   app.innerHTML = `
     <section class="page-head">
@@ -440,6 +450,7 @@ function renderVirales(app){
     </div>
     <div class="chips" role="toolbar" aria-label="Filtrar virales por tipo">
       <button class="chip" type="button" data-vcat="all" aria-pressed="${state.vcat === "all"}">Todo</button>
+      ${scoped.some(abiertoAhora) ? `<button class="chip" type="button" data-vcat="open" aria-pressed="${state.vcat === "open"}">Abierto ahora</button>` : ""}
       ${cats.map(([k, l]) => `<button class="chip" type="button" data-vcat="${k}" aria-pressed="${state.vcat === k}">${esc(l)}</button>`).join("")}
     </div>
     ${shown.length ? `<div class="vgrid">${shown.map(p => vcardHTML(p, true)).join("")}</div>` : `<p class="empty">Nada viral con este filtro.</p>`}
@@ -452,11 +463,11 @@ function vcardHTML(p, withCity){
   const img = p.ph || p.pp;
   const dl = distLabel(p);
   const sl = shutLabel(p);
-  return `<article class="vcard k-${esc(p.k)}">
+  return `<article class="vcard k-${esc(p.k)}${seen.has(p.id) ? " is-seen" : ""}">
     <button class="vc-open" type="button" data-open="${p.id}" aria-label="Ver ${esc(p.n)}">
       ${img ? `<img src="${esc(img.file)}" alt="${esc(img.alt || p.n)}" loading="lazy" decoding="async">` : `<span class="vnoimg">${cityCode(cityOf(p.c))}</span>`}
       <span class="vcity">${withCity ? cityCode(cityOf(p.c)) : esc(CATS[p.k].split(/[ ,]/)[0])}</span>
-      <span class="vbody">${sl ? `<span class="vshut${softShut(sl)}">${esc(sl)}</span>` : ""}${dl ? `<span class="vdist">${esc(dl)}</span>` : ""}<b class="vtitle">${esc(p.n)}</b><span class="zh" lang="${langOf(p.z)}">${esc(p.z)}</span>${p.v ? `<span class="vwhy">${esc(p.v)}</span>` : p.p ? `<span class="vwhy price">${esc(p.p)}</span>` : ""}</span>
+      <span class="vbody">${seen.has(p.id) ? `<span class="vseen">✓ Ya fuiste</span>` : ""}${sl ? `<span class="vshut${softShut(sl)}">${esc(sl)}</span>` : ""}${dl ? `<span class="vdist">${esc(dl)}</span>` : ""}<b class="vtitle">${esc(p.n)}</b><span class="zh" lang="${langOf(p.z)}">${esc(p.z)}</span>${p.v ? `<span class="vwhy">${esc(p.v)}</span>` : p.p ? `<span class="vwhy price">${esc(p.p)}</span>` : ""}</span>
     </button>
     ${favHTML(p)}
   </article>`;
@@ -489,7 +500,7 @@ function renderPlace(app){
     ${(p.gal || []).length ? `<h2 class="lbl">Más fotos</h2>${stripHTML(p.gal)}` : ""}
     ${dishes.length ? `<h2 class="lbl">Pide aquí</h2><div class="rail">${dishes.map(({d, i}) => dishCardHTML(d, p.c, i)).join("")}</div>` : ""}
     ${near.length ? `<h2 class="lbl">Cerca de aquí</h2><div class="near">${near.map(({q, d}) => nearRowHTML(q, d, dirTo(p.ll, q.ll))).join("")}</div>` : ""}
-    <div class="row quick">${p.r ? `<button class="btn primary" type="button" data-sub="reservas">Cómo reservar</button>` : ""}<button class="btn" type="button" data-pick-city="${p.c}">Más lugares en ${esc(cityOf(p.c).es)} →</button></div>
+    <div class="row quick">${p.r ? `<button class="btn primary" type="button" data-sub="reservas">Cómo reservar</button>` : ""}<button class="btn${seen.has(p.id) ? " on" : ""}" type="button" data-seen="${p.id}" aria-pressed="${seen.has(p.id)}">${seen.has(p.id) ? "✓ Ya fuiste" : "Marcar: ya fui"}</button><button class="btn" type="button" data-pick-city="${p.c}">Más lugares en ${esc(cityOf(p.c).es)} →</button></div>
   </div>`;
 }
 
@@ -1986,6 +1997,14 @@ document.addEventListener("click", e => {
     if (state.tab === "buscar") renderResults(); else render();
     return;
   }
+  if ((x = el("[data-seen]"))){
+    const id = x.dataset.seen;
+    seen.has(id) ? seen.delete(id) : seen.add(id);
+    store.set("rvc-seen", [...seen]);
+    if (state.tab === "buscar") renderResults(); else render();
+    return;
+  }
+  if (el("[data-qopen]")){ state.qopen = !state.qopen; renderResults(); return; }
   if ((x = el("[data-go]"))){ openDriver(byId[x.dataset.go]); return; }
   if ((x = el("[data-transfer]"))){ openTransfer(TRIP.transfers[x.dataset.transfer]); return; }
   if ((x = el("[data-hotel]"))){ openHotel(x.dataset.hotel || currentHotelCity()); return; }
