@@ -663,3 +663,7 @@ dialog#driver::backdrop{background:#fff}
 .vcard.is-seen .vnoimg{opacity:.5}
 .vseen{display:inline-block;padding:3px 9px;border-radius:999px;background:var(--mint);color:#fff;font-size:11.5px;font-weight:800;text-shadow:none;margin-bottom:3px}
 .more-row{justify-content:center;margin-top:18px}
+/* ubicación aproximada: ámbar, el mismo código visual que "Sin verificar" */
+.approx-chip{background:var(--yellow-soft);color:#6E5200;margin-top:8px}
+/* "Ojo" (consejo) en violeta; el ámbar queda solo para "Sin verificar" (fiabilidad del dato) */
+.tag.warn{background:var(--violet-soft);color:var(--violet)}

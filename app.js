@@ -505,6 +505,7 @@ function renderPlace(app){
   const near = p.ll ? P.filter(q => q.id !== p.id && q.c === p.c && q.ll).map(q => ({q, d: distKm(p.ll, q.ll)})).filter(x => x.d < 1.5).sort((a, b) => a.d - b.d).slice(0, 8) : [];
   app.innerHTML = `<div class="place">
     ${origin ? `<p class="dist-chip">${fmtKm(distKm(origin.pt, p.ll))} ${dirTo(origin.pt, p.ll)} de ${origin.label}</p>` : ""}
+    ${p.ll && p.ll[2] === "baja" ? `<p class="dist-chip approx-chip">Ubicación aproximada: guíate por la dirección, no por el punto del mapa</p>` : ""}
     ${(st => st.label ? `<p class="dist-chip state-chip ${st.open ? "open" : "closed"}">Ahora en ${esc(cityOf(p.c).es)}: ${esc(st.label)}</p>` : "")(openState(p, cityNow(p.c)))}
     ${entryHTML(p, true)}
     ${(p.gal || []).length ? `<h2 class="lbl">Más fotos</h2>${stripHTML(p.gal)}` : ""}
@@ -663,8 +664,10 @@ function orderedSections(){
   return [...known, ...all.filter(s => !TOPICS[s.id])];
 }
 
+// "Ojo" es un consejo; "Sin verificar" habla de si el dato es confiable. No deben verse igual.
 const tagClass = t => /no vale|evita|nunca|no compres|no la/i.test(t) ? "no"
-  : /ojo|sin verificar/i.test(t) ? "unv"
+  : /sin verificar/i.test(t) ? "unv"
+  : /ojo/i.test(t) ? "warn"
   : /vale la pena|esencial|recomend/i.test(t) ? "when" : "viral";
 
 function calcHTML(b){
@@ -683,11 +686,14 @@ function calcHTML(b){
 
 function listItemHTML(it){
   const gi = it.addr ? GCARDS.push(it) - 1 : -1;
+  // si el texto admite que un dato no está confirmado, que se vea sin tener que leerlo entero,
+  // y sin tapar el consejo que ya traía la ficha: se muestran las dos etiquetas
+  const tags = [it.tag, /sin verificar/i.test(it.b || "") && !/sin verificar/i.test(it.tag || "") ? "Sin verificar" : ""].filter(Boolean);
   const tel = it.tel ? `<a class="tel" href="tel:${esc(String(it.tel).replace(/[^\d+]/g, ""))}">${esc(it.tel)}</a>` : "";
   return `<div class="gitem${it.ph ? " has-thumb" : ""}">
     ${thumbHTML(it.ph, "ithumb", it.h)}
     <div class="gbody">
-      <div class="gtop"><h4>${esc(it.h)}</h4>${it.tag ? `<span class="tag ${tagClass(it.tag)}">${esc(it.tag)}</span>` : ""}</div>
+      <div class="gtop"><h4>${esc(it.h)}</h4>${tags.map(t => `<span class="tag ${tagClass(t)}">${esc(t)}</span>`).join("")}</div>
       ${it.zh ? `<div class="zh" lang="${langOf(it.zh)}">${esc(it.zh)}${it.addr ? `<span class="addr">${esc(it.addr)}</span>` : ""}</div>` : it.addr ? `<div class="zh" lang="${langOf(it.addr)}"><span class="addr">${esc(it.addr)}</span></div>` : ""}
       ${it.price ? `<div class="meta"><span>${esc(it.price)}</span></div>` : ""}
       ${it.b ? `<p>${esc(it.b)}</p>` : ""}
