@@ -577,6 +577,7 @@ const TOPICS = {
   "frases-emergencia": {g: "ayuda", icon: "cross", label: "Emergencias", desc: "110, 120 y frases"},
   "emergencias": {g: "ayuda", icon: "bank", label: "Embajadas y hospitales", desc: "México, España y clínicas"},
   "apps": {g: "ayuda", icon: "phone", label: "Apps", desc: "Qué bajar antes de volar"},
+  "auditoria": {g: "ayuda", icon: "list", label: "Qué está sin confirmar", desc: "Qué revisar tú en el lugar"},
   "esim": {g: "ayuda", icon: "signal", label: "eSIM y VPN", desc: "Internet sin bloqueos"},
   "dinero": {g: "ayuda", icon: "coin", label: "Dinero", desc: "Pagos y devolución de impuestos"}
 };
@@ -640,6 +641,41 @@ function hotelsEditorHTML(){
   }).join("")}</div>`;
 }
 
+// panel de calidad: lo que la app NO sabe, calculado en vivo. Debe ser function (lo usa VIRTUAL al cargar).
+function auditoriaHTML(){
+  const sinH = P.filter(p => !p.h), sinPh = P.filter(p => !p.ph), sinLl = P.filter(p => !p.ll);
+  const aprox = P.filter(p => p.ll && p.ll[2] === "baja");
+  const secs = (GUIDE.sections || []).map(s => ({
+    t: s.title,
+    n: (s.blocks || []).reduce((a, b) => a + (b.items || []).filter(it => /sin verificar/i.test(JSON.stringify(it))).length, 0)
+  })).filter(x => x.n).sort((a, b) => b.n - a.n);
+  const porCiudad = CITIES.map(c => ({c, n: sinH.filter(p => p.c === c.id).length})).filter(x => x.n).sort((a, b) => b.n - a.n);
+  const fila = (etiqueta, n, nota) => `<div class="gitem"><div class="gbody">
+      <div class="gtop"><h4>${esc(etiqueta)}</h4><span class="tag ${n ? "unv" : "when"}">${n} de ${P.length}</span></div>
+      <p>${esc(nota)}</p></div></div>`;
+  return `<p class="gp">La app te dice lo que no sabe. Aquí está junto, para que sepas qué confirmar en el lugar en vez de fiarte de más.</p>
+    <h3 class="gsub">Tus ${P.length} lugares</h3>
+    <div class="glist">
+      ${fila("Sin horario", sinH.length, "No te puedo decir si están abiertos, así que no salen en el filtro “Abierto ahora”. Pregunta en recepción del hotel o míralo en Dianping desde tu teléfono: allá sí funciona.")}
+      ${fila("Sin foto", sinPh.length, "No había foto con licencia libre que fuera de verdad del lugar. Antes que poner una engañosa, la tarjeta sale con el código de la ciudad.")}
+      ${fila("Sin ubicación", sinLl.length, "No aparecen en el mapa ni te dicen a qué distancia están. Sí traen dirección en chino para enseñarle al chofer.")}
+      ${fila("Ubicación aproximada", aprox.length, "El punto es del edificio o de la calle, no del local exacto. Guíate por la dirección escrita.")}
+    </div>
+    ${porCiudad.length ? `<h3 class="gsub">Sin horario, por ciudad</h3>
+    <div class="glist">${porCiudad.map(x => `<div class="gitem"><div class="gbody">
+      <div class="gtop"><h4>${esc(x.c.es)}</h4><span class="tag unv">${x.n}</span></div>
+      <p>${esc(x.c.dates)}</p></div></div>`).join("")}</div>` : ""}
+    ${aprox.length ? `<h3 class="gsub">Estos ${aprox.length} tienen el pin aproximado</h3>
+    <div class="near">${aprox.map(p => `<div class="near-row k-${esc(p.k)}">
+      <span class="near-d"><span class="cat">${esc(cityCode(cityOf(p.c)))}</span></span>
+      <button class="rec-open" type="button" data-open="${esc(p.id)}"><b class="rec-title">${esc(p.n)}</b><span class="zh" lang="${langOf(p.z)}">${esc(p.z)}</span></button>
+    </div>`).join("")}</div>` : ""}
+    ${secs.length ? `<h3 class="gsub">Guías con algún dato sin confirmar</h3>
+    <div class="glist">${secs.map(x => `<div class="gitem"><div class="gbody">
+      <div class="gtop"><h4>${esc(x.t)}</h4><span class="tag unv">${x.n}</span></div></div></div>`).join("")}</div>` : ""}
+    <p class="fine">Nada de esto se inventó: lo que no se pudo confirmar con una fuente quedó marcado como tal. El hueco grande son los horarios de restaurantes y cafés chinos, que solo viven en Dianping y en WeChat, y esas dos bloquean el acceso automático.</p>`;
+}
+
 const VIRTUAL = [
   {id: "traslados", title: "Traslados en chino", intro: "Estaciones y aeropuertos de tu itinerario. Toca Ir para enseñárselo al taxista.", html: transfersHTML},
   {id: "hoteles", title: "Mis hoteles", html: hotelsEditorHTML},
@@ -655,7 +691,8 @@ const VIRTUAL = [
   {id: "cerca", title: "Cerca de mí", html: cercaHTML, when: () => P.some(p => p.ll)},
   {id: "metro", title: "Metro sin internet", html: metroHTML, when: () => GUIDE.metro && CITIES.some(c => GUIDE.metro[c.id] && GUIDE.metro[c.id].file)},
   {id: "compras-lista", title: "Lista de compras", html: shopHTML},
-  {id: "tallas", title: "Tallas China, Corea y México", html: tallasHTML, when: () => GUIDE.tallas && (GUIDE.tallas.tables || []).length}
+  {id: "tallas", title: "Tallas China, Corea y México", html: tallasHTML, when: () => GUIDE.tallas && (GUIDE.tallas.tables || []).length},
+  {id: "auditoria", title: "Qué está sin confirmar", html: auditoriaHTML}
 ];
 
 function orderedSections(){
