@@ -2284,8 +2284,29 @@ async function poll(){
 }
 
 if ("serviceWorker" in navigator){
-  navigator.serviceWorker.register("sw.js").then(poll).catch(updateOffline);
+  // updateViaCache "none": el sw.js nunca se sirve desde la caché HTTP, así que
+  // una versión nueva se detecta aunque GitHub Pages lo mande con max-age=600.
+  navigator.serviceWorker.register("sw.js", {updateViaCache: "none"}).then(reg => {
+    poll();
+    // buscar versión nueva al abrir y cada vez que la app vuelve al frente:
+    // instalada en la pantalla de inicio no hay navegación que lo dispare sola.
+    const buscar = () => { try{ reg.update(); }catch(e){} };
+    buscar();
+    document.addEventListener("visibilitychange", () => { if (!document.hidden) buscar(); });
+    window.addEventListener("focus", buscar);
+  }).catch(updateOffline);
   navigator.serviceWorker.addEventListener("message", e => { if (e.data && e.data.type === "progress") updateOffline(); });
+  // el sw hace skipWaiting + clients.claim, así que al activarse uno nuevo cambia
+  // el controlador: recargamos una sola vez para que se vean los lugares nuevos.
+  // Solo si YA había controlador: en la primera visita clients.claim() también
+  // dispara este evento y una recarga ahí sería gratuita y molesta.
+  const habiaSW = !!navigator.serviceWorker.controller;
+  let recargando = false;
+  navigator.serviceWorker.addEventListener("controllerchange", () => {
+    if (!habiaSW || recargando) return;
+    recargando = true;
+    location.reload();
+  });
 } else {
   updateOffline();
 }
