@@ -434,11 +434,13 @@ function goDay(date){
 /* ---------- virales ---------- */
 
 function renderVirales(app){
-  const pool = P.filter(p => p.ig || p.v);
+  // los que manda Bosco entran aquí aunque no vengan etiquetados como virales
+  const pool = P.filter(p => p.ig || p.v || p.mio);
   const scoped = state.vcity === "all" ? pool : pool.filter(p => p.c === state.vcity);
   const abiertoAhora = p => p.h && openState(p, cityNow(p.c)).open === true;
   const shown = state.vcat === "all" ? scoped
     : state.vcat === "open" ? scoped.filter(abiertoAhora)
+    : state.vcat === "mios" ? scoped.filter(p => p.mio)
     : scoped.filter(p => p.k === state.vcat);
   const cats = Object.entries(CATS).filter(([k]) => scoped.some(p => p.k === k));
   // de a 24: la lista completa eran 36 pantallas de scroll sin un solo corte
@@ -456,6 +458,7 @@ function renderVirales(app){
     </div>
     <div class="chips" role="toolbar" aria-label="Filtrar virales por tipo">
       <button class="chip" type="button" data-vcat="all" aria-pressed="${state.vcat === "all"}">Todo</button>
+      ${scoped.some(p => p.mio) ? `<button class="chip" type="button" data-vcat="mios" aria-pressed="${state.vcat === "mios"}">◆ Los que mandaste</button>` : ""}
       ${scoped.some(abiertoAhora) ? `<button class="chip" type="button" data-vcat="open" aria-pressed="${state.vcat === "open"}">Abierto ahora</button>` : ""}
       ${cats.map(([k, l]) => `<button class="chip" type="button" data-vcat="${k}" aria-pressed="${state.vcat === k}">${esc(l)}</button>`).join("")}
     </div>
@@ -1244,6 +1247,14 @@ function mapSVG(cid, origin, near){
   const Y = la => (oy + (maxLat - la) * s).toFixed(1);
   const pxPerKm = s / 111.32;
   const barKm = [0.2, 0.5, 1, 2, 5, 10, 20].find(k => k * pxPerKm >= 120) || 20;
+  // avenidas reales por debajo de los puntos: solo las que cruzan el encuadre
+  const margen = 0.01;
+  const dentro = q => q[0] >= minLat - margen && q[0] <= maxLat + margen && q[1] >= minLng - margen && q[1] <= maxLng + margen;
+  const vias = ((GUIDE.streets || {})[cid] || [])
+    .filter(t => t.some(dentro))
+    .slice(0, 500)
+    .map(t => `<path class="street" d="${t.map((q, i) => `${i ? "L" : "M"}${X(q[1])} ${Y(q[0])}`).join("")}"/>`)
+    .join("");
   const pins = core.map(p => `<g class="pin" data-open="${p.id}"><title>${esc(p.n)}</title><circle class="k-${esc(p.k)}" cx="${X(p.ll[1])}" cy="${Y(p.ll[0])}" r="18"/></g>`).join("");
   const me = showMe ? `<g class="me"><circle class="halo" cx="${X(origin.pt[1])}" cy="${Y(origin.pt[0])}" r="44"/><circle class="dot" cx="${X(origin.pt[1])}" cy="${Y(origin.pt[0])}" r="16"/></g>` : "";
   return `<figure class="cmap">
@@ -1251,9 +1262,9 @@ function mapSVG(cid, origin, near){
       <text x="${W - 90}" y="50">N ↑</text>
       <line class="bar" x1="${pad}" y1="${H - 26}" x2="${(pad + barKm * pxPerKm).toFixed(1)}" y2="${H - 26}"/>
       <text x="${pad}" y="${H - 44}">${barKm < 1 ? barKm * 1000 + " m" : barKm + " km"}</text>
-      ${pins}${me}
+      ${vias}${pins}${me}
     </svg>
-    <figcaption>Mapa sin calles: cada punto es un lugar (el color es el tipo)${showMe ? " y el punto azul eres tú" : ""}. Toca un punto para abrirlo.${core.length < pts.length ? ` ${pts.length - core.length} lugares quedan fuera de este mapa; salen en la lista.` : ""}</figcaption>
+    <figcaption>${vias ? "Las avenidas principales van en gris" : "Mapa sin calles"}: cada punto es un lugar (el color es el tipo)${showMe ? " y el punto azul eres tú" : ""}. Toca un punto para abrirlo.${core.length < pts.length ? ` ${pts.length - core.length} lugares quedan fuera de este mapa; salen en la lista.` : ""}</figcaption>
   </figure>`;
 }
 
