@@ -667,3 +667,6 @@ dialog#driver::backdrop{background:#fff}
 .approx-chip{background:var(--yellow-soft);color:#6E5200;margin-top:8px}
 /* "Ojo" (consejo) en violeta; el ámbar queda solo para "Sin verificar" (fiabilidad del dato) */
 .tag.warn{background:var(--violet-soft);color:var(--violet)}
+/* lo que mandó Bosco: distintivo propio, no una categoría */
+.vcity.mio{background:var(--ink);color:#fff}
+.mio-chip{background:var(--ink);color:#fff}

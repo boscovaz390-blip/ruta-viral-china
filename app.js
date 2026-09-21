@@ -231,14 +231,16 @@ function renderCity(app){
   // "abierto ahora" usa la hora de esa ciudad, no la tuya
   const abierto = p => p.h && openState(p, cityNow(c.id)).open === true;
   const counts = {all: all.length, fav: all.filter(p => favs.has(p.id)).length,
-                  open: all.filter(abierto).length, seen: all.filter(p => seen.has(p.id)).length};
+                  open: all.filter(abierto).length, seen: all.filter(p => seen.has(p.id)).length,
+                  mios: all.filter(p => p.mio).length};
   Object.keys(CATS).forEach(k => counts[k] = all.filter(p => p.k === k).length);
   const shown = state.cat === "all" ? all
     : state.cat === "fav" ? all.filter(p => favs.has(p.id))
     : state.cat === "open" ? all.filter(abierto)
     : state.cat === "seen" ? all.filter(p => seen.has(p.id))
+    : state.cat === "mios" ? all.filter(p => p.mio)
     : all.filter(p => p.k === state.cat);
-  const chipDefs = [["all", "Todo"], ["open", "Abierto ahora"], ...Object.entries(CATS), ["fav", "★ Guardados"], ["seen", "✓ Ya fui"]]
+  const chipDefs = [["all", "Todo"], ["mios", "◆ Los que mandaste"], ["open", "Abierto ahora"], ...Object.entries(CATS), ["fav", "★ Guardados"], ["seen", "✓ Ya fui"]]
     .filter(([k]) => k === "all" || k === "fav" || counts[k] > 0);
   const banner = all.find(p => p.ph && p.ph.kind === "lugar" && p.k === "noc") || all.find(p => p.ph && p.ph.kind === "lugar");
 
@@ -476,7 +478,7 @@ function vcardHTML(p, withCity){
   return `<article class="vcard k-${esc(p.k)}${seen.has(p.id) ? " is-seen" : ""}">
     <button class="vc-open" type="button" data-open="${p.id}" aria-label="Ver ${esc(p.n)}">
       ${img ? `<img src="${esc(img.file)}" alt="${esc(img.alt || p.n)}" loading="lazy" decoding="async">` : `<span class="vnoimg">${cityCode(cityOf(p.c))}</span>`}
-      <span class="vcity">${withCity ? cityCode(cityOf(p.c)) : esc(CATS[p.k].split(/[ ,]/)[0])}</span>
+      <span class="vcity${p.mio ? " mio" : ""}">${p.mio ? "◆ " : ""}${withCity ? cityCode(cityOf(p.c)) : esc(CATS[p.k].split(/[ ,]/)[0])}</span>
       <span class="vbody">${estado}${dl ? `<span class="vdist">${esc(dl)}</span>` : ""}<b class="vtitle">${esc(p.n)}</b><span class="zh" lang="${langOf(p.z)}">${esc(p.z)}</span>${estado ? "" : p.v ? `<span class="vwhy">${esc(p.v)}</span>` : p.p ? `<span class="vwhy price">${esc(p.p)}</span>` : ""}</span>
     </button>
     ${favHTML(p)}
@@ -506,6 +508,7 @@ function renderPlace(app){
   app.innerHTML = `<div class="place">
     ${origin ? `<p class="dist-chip">${fmtKm(distKm(origin.pt, p.ll))} ${dirTo(origin.pt, p.ll)} de ${origin.label}</p>` : ""}
     ${p.ll && p.ll[2] === "baja" ? `<p class="dist-chip approx-chip">Ubicación aproximada: guíate por la dirección, no por el punto del mapa</p>` : ""}
+    ${p.mio ? `<p class="dist-chip mio-chip">◆ Lo mandaste tú${p.via ? ` · ${esc(p.via)}` : ""}</p>` : ""}
     ${(st => st.label ? `<p class="dist-chip state-chip ${st.open ? "open" : "closed"}">Ahora en ${esc(cityOf(p.c).es)}: ${esc(st.label)}</p>` : "")(openState(p, cityNow(p.c)))}
     ${entryHTML(p, true)}
     ${(p.gal || []).length ? `<h2 class="lbl">Más fotos</h2>${stripHTML(p.gal)}` : ""}
