@@ -21,6 +21,9 @@ const store = {
 };
 let favs = new Set(store.get("rvc-favs", []));
 let seen = new Set(store.get("rvc-seen", []));   // los que ya visitaste
+// tus fotos: viven SOLO en este teléfono, nunca se publican con la app
+let misFotos = store.get("rvc-fotos", {});
+const fotoDe = p => misFotos[p.id] ? {file: misFotos[p.id], alt: `Tu foto de ${p.n}`, kind: "mia"} : p.ph;
 let gastos = store.get("rvc-gastos", []);
 
 const esc = s => String(s ?? "").replace(/[&<>"]/g, ch => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[ch]));
@@ -167,15 +170,18 @@ function entryHTML(p, withCity){
   if (p.v) tags.push(`<span class="tag viral">${esc(p.v)}</span>`);
   if (p.u) tags.push(`<span class="tag unv">Sin verificar</span>`);
   const meta = [p.p, p.h].filter(Boolean).map(x => `<span>${esc(x)}</span>`).join("");
+  const ph = fotoDe(p);
   const foot = [
     p.s ? `<a class="src" href="${esc(p.s)}" target="_blank" rel="noopener">Fuente ↗</a>` : "",
-    p.ph ? `Foto${p.ph.kind === "ilustrativa" ? " ilustrativa" : ""}: ${creditHTML(p.ph)}` : ""
+    ph ? (ph.kind === "mia" ? "Tu foto, guardada solo en este teléfono"
+        : `Foto${ph.kind === "ilustrativa" ? " ilustrativa" : ""}: ${creditHTML(ph)}`) : ""
   ].filter(Boolean).join(" · ");
-  return `<article class="entry k-${esc(p.k)}${p.ph ? " has-ph" : " no-ph"}" id="e-${esc(p.id)}">
+  return `<article class="entry k-${esc(p.k)}${ph ? " has-ph" : " no-ph"}" id="e-${esc(p.id)}">
     <div class="cover">
-      ${p.ph ? `<img src="${esc(p.ph.file)}" alt="${esc(p.ph.alt || p.n)}" loading="lazy" decoding="async">` : coverFill(p)}
+      ${ph ? `<img src="${esc(ph.file)}" alt="${esc(ph.alt || p.n)}" loading="lazy" decoding="async">` : coverFill(p)}
       <span class="cat">${esc(CATS[p.k])}</span>
-      ${p.ph && p.ph.kind === "ilustrativa" ? `<span class="illu">Foto ilustrativa</span>` : ""}
+      ${ph && ph.kind === "ilustrativa" ? `<span class="illu">Foto ilustrativa</span>` : ""}
+      ${ph && ph.kind === "mia" ? `<span class="illu mia">Tu foto</span>` : ""}
       ${favHTML(p)}
     </div>
     <div class="main">
@@ -211,7 +217,7 @@ function shutLabel(p){
 }
 
 function recHTML(p){
-  const img = p.ph || p.pp;
+  const img = fotoDe(p) || p.pp;
   const dl = distLabel(p);
   const sl = shutLabel(p);
   return `<article class="rcard k-${esc(p.k)}">
@@ -472,7 +478,7 @@ function renderVirales(app){
 /* ---------- página de lugar ---------- */
 
 function vcardHTML(p, withCity){
-  const img = p.ph || p.pp;
+  const img = fotoDe(p) || p.pp;
   const dl = distLabel(p);
   const sl = shutLabel(p);
   // una sola etiqueta de estado por tarjeta: "ya fuiste" manda sobre "cerrado"
@@ -517,7 +523,7 @@ function renderPlace(app){
     ${(p.gal || []).length ? `<h2 class="lbl">Más fotos</h2>${stripHTML(p.gal)}` : ""}
     ${dishes.length ? `<h2 class="lbl">Pide aquí</h2><div class="rail">${dishes.map(({d, i}) => dishCardHTML(d, p.c, i)).join("")}</div>` : ""}
     ${near.length ? `<h2 class="lbl">Cerca de aquí</h2><div class="near">${near.map(({q, d}) => nearRowHTML(q, d, dirTo(p.ll, q.ll))).join("")}</div>` : ""}
-    <div class="row quick">${p.r ? `<button class="btn primary" type="button" data-sub="reservas">Cómo reservar</button>` : ""}<button class="btn${seen.has(p.id) ? " on" : ""}" type="button" data-seen="${p.id}" aria-pressed="${seen.has(p.id)}">${seen.has(p.id) ? "✓ Ya fuiste" : "Marcar: ya fui"}</button><button class="btn" type="button" data-pick-city="${p.c}">Más lugares en ${esc(cityOf(p.c).es)} →</button></div>
+    <div class="row quick">${p.r ? `<button class="btn primary" type="button" data-sub="reservas">Cómo reservar</button>` : ""}<button class="btn${seen.has(p.id) ? " on" : ""}" type="button" data-seen="${p.id}" aria-pressed="${seen.has(p.id)}">${seen.has(p.id) ? "✓ Ya fuiste" : "Marcar: ya fui"}</button><input type="file" accept="image/*" id="mf-${esc(p.id)}" data-mifoto-input="${esc(p.id)}" hidden><button class="btn" type="button" data-mifoto="${esc(p.id)}">${misFotos[p.id] ? "Cambiar mi foto" : "Poner mi foto"}</button>${misFotos[p.id] ? `<button class="btn" type="button" data-quitarfoto="${esc(p.id)}">Quitar mi foto</button>` : ""}<button class="btn" type="button" data-pick-city="${p.c}">Más lugares en ${esc(cityOf(p.c).es)} →</button></div>
   </div>`;
 }
 
@@ -2079,6 +2085,13 @@ document.addEventListener("click", e => {
     return;
   }
   if (el("[data-qopen]")){ state.qopen = !state.qopen; renderResults(); return; }
+  if ((x = el("[data-mifoto]"))){ const f = document.getElementById("mf-" + x.dataset.mifoto); if (f) f.click(); return; }
+  if ((x = el("[data-quitarfoto]"))){
+    delete misFotos[x.dataset.quitarfoto];
+    store.set("rvc-fotos", misFotos);
+    render();
+    return;
+  }
   if ((x = el("[data-go]"))){ openDriver(byId[x.dataset.go]); return; }
   if ((x = el("[data-transfer]"))){ openTransfer(TRIP.transfers[x.dataset.transfer]); return; }
   if ((x = el("[data-hotel]"))){ openHotel(x.dataset.hotel || currentHotelCity()); return; }
@@ -2276,6 +2289,44 @@ if ("serviceWorker" in navigator){
 } else {
   updateOffline();
 }
+
+/* ---------- tus fotos: se quedan en este teléfono ---------- */
+
+// se reducen a 900 px y se guardan como JPEG para que quepan en el almacén del navegador
+function guardarMiFoto(id, archivo){
+  const aviso = t => { const m = document.getElementById("mifoto-msg"); if (m) m.textContent = t; };
+  const lector = new FileReader();
+  lector.onload = () => {
+    const img = new Image();
+    img.onload = () => {
+      const lado = Math.min(900, Math.max(img.width, img.height));
+      const escala = lado / Math.max(img.width, img.height);
+      const c = document.createElement("canvas");
+      c.width = Math.round(img.width * escala);
+      c.height = Math.round(img.height * escala);
+      c.getContext("2d").drawImage(img, 0, 0, c.width, c.height);
+      const datos = c.toDataURL("image/jpeg", 0.72);
+      try{
+        misFotos[id] = datos;
+        store.set("rvc-fotos", misFotos);
+        if (store.get("rvc-fotos", {})[id] !== datos) throw new Error("no se guardó");
+        render();
+      }catch(e){
+        delete misFotos[id];
+        aviso("No cupo: el almacén del teléfono está lleno. Quita alguna foto tuya de otro lugar.");
+      }
+    };
+    img.onerror = () => aviso("No se pudo leer esa imagen.");
+    img.src = lector.result;
+  };
+  lector.onerror = () => aviso("No se pudo leer el archivo.");
+  lector.readAsDataURL(archivo);
+}
+
+document.addEventListener("change", e => {
+  const inp = e.target.closest("[data-mifoto-input]");
+  if (inp && inp.files && inp.files[0]) guardarMiFoto(inp.dataset.mifotoInput, inp.files[0]);
+});
 
 render();
 })();

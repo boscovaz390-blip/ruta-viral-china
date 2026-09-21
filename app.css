@@ -672,3 +672,5 @@ dialog#driver::backdrop{background:#fff}
 .mio-chip{background:var(--ink);color:#fff}
 /* avenidas reales del mapa: por debajo de los pines y sin competir con ellos */
 .cmap .street{stroke:#E0D2C6;stroke-width:3.5;fill:none;stroke-linecap:round;stroke-linejoin:round}
+/* tu propia foto: se distingue de las que trae la app */
+.illu.mia{background:var(--mint);color:#fff}
