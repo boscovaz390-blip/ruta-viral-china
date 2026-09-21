@@ -21,9 +21,72 @@ const store = {
 };
 let favs = new Set(store.get("rvc-favs", []));
 let seen = new Set(store.get("rvc-seen", []));   // los que ya visitaste
-// tus fotos: viven SOLO en este teléfono, nunca se publican con la app
-let misFotos = store.get("rvc-fotos", {});
+// tus fotos: viven SOLO en este teléfono, nunca se publican con la app.
+// Antes iban en localStorage, donde solo cabían 17 (5 MB entre todas las claves).
+// Ahora van en IndexedDB, que admite cientos. Se quedan en memoria para que
+// pintar la pantalla siga siendo instantáneo.
+let misFotos = {};
 const fotoDe = p => misFotos[p.id] ? {file: misFotos[p.id], alt: `Tu foto de ${p.n}`, kind: "mia"} : p.ph;
+
+const fotosDB = {
+  db: null,
+  abrir(){
+    return new Promise(listo => {
+      let r;
+      try{ if (!("indexedDB" in window)) return listo(null); r = indexedDB.open("rvc-fotos", 1); }
+      catch(e){ return listo(null); }
+      r.onupgradeneeded = () => { if (!r.result.objectStoreNames.contains("f")) r.result.createObjectStore("f"); };
+      r.onsuccess = () => listo(r.result);
+      r.onerror = () => listo(null);
+      setTimeout(() => listo(null), 4000);   // navegador en privado o bloqueado: seguimos sin él
+    });
+  },
+  todas(){
+    return new Promise(listo => {
+      if (!this.db) return listo({});
+      try{
+        const t = this.db.transaction("f", "readonly").objectStore("f");
+        const claves = t.getAllKeys(), vals = t.getAll();
+        vals.onsuccess = () => {
+          const out = {};
+          (claves.result || []).forEach((k, i) => out[k] = vals.result[i]);
+          listo(out);
+        };
+        vals.onerror = () => listo({});
+      }catch(e){ listo({}); }
+    });
+  },
+  guardar(id, datos){
+    return new Promise(listo => {
+      if (!this.db){ try{ store.set("rvc-fotos", misFotos); listo(store.get("rvc-fotos", {})[id] === datos); }catch(e){ listo(false); } return; }
+      try{
+        const t = this.db.transaction("f", "readwrite");
+        t.objectStore("f").put(datos, id);
+        t.oncomplete = () => listo(true);
+        t.onerror = t.onabort = () => listo(false);
+      }catch(e){ listo(false); }
+    });
+  },
+  borrar(id){
+    if (!this.db){ store.set("rvc-fotos", misFotos); return; }
+    try{ this.db.transaction("f", "readwrite").objectStore("f").delete(id); }catch(e){}
+  }
+};
+
+// al abrir la app: traer las fotos y mudar las que quedaran en el almacén viejo
+async function cargarMisFotos(){
+  const viejas = store.get("rvc-fotos", null);
+  fotosDB.db = await fotosDB.abrir();
+  if (!fotosDB.db){ misFotos = viejas || {}; return; }   // sin IndexedDB, como antes
+  misFotos = await fotosDB.todas();
+  if (viejas && Object.keys(viejas).length){
+    for (const [id, datos] of Object.entries(viejas)) if (!misFotos[id]){
+      if (await fotosDB.guardar(id, datos)) misFotos[id] = datos;
+    }
+    try{ localStorage.removeItem("rvc-fotos"); }catch(e){}   // libera los 5 MB de antes
+  }
+  render();
+}
 let gastos = store.get("rvc-gastos", []);
 
 const esc = s => String(s ?? "").replace(/[&<>"]/g, ch => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[ch]));
@@ -2088,7 +2151,7 @@ document.addEventListener("click", e => {
   if ((x = el("[data-mifoto]"))){ const f = document.getElementById("mf-" + x.dataset.mifoto); if (f) f.click(); return; }
   if ((x = el("[data-quitarfoto]"))){
     delete misFotos[x.dataset.quitarfoto];
-    store.set("rvc-fotos", misFotos);
+    fotosDB.borrar(x.dataset.quitarfoto);
     render();
     return;
   }
@@ -2319,25 +2382,26 @@ function guardarMiFoto(id, archivo){
   const lector = new FileReader();
   lector.onload = () => {
     const img = new Image();
-    img.onload = () => {
-      const lado = Math.min(900, Math.max(img.width, img.height));
-      const escala = lado / Math.max(img.width, img.height);
-      const c = document.createElement("canvas");
-      c.width = Math.round(img.width * escala);
-      c.height = Math.round(img.height * escala);
-      c.getContext("2d").drawImage(img, 0, 0, c.width, c.height);
-      const datos = c.toDataURL("image/jpeg", 0.72);
-      try{
+    img.onload = async () => {
+      const encoger = (lado, q) => {
+        const escala = Math.min(1, lado / Math.max(img.width, img.height));
+        const c = document.createElement("canvas");
+        c.width = Math.round(img.width * escala);
+        c.height = Math.round(img.height * escala);
+        c.getContext("2d").drawImage(img, 0, 0, c.width, c.height);
+        return c.toDataURL("image/jpeg", q);
+      };
+      aviso("Guardando…");
+      // si el teléfono anda justo de espacio, se reintenta más comprimida antes de rendirse
+      for (const [lado, q] of [[900, 0.72], [800, 0.6], [720, 0.5], [640, 0.45]]){
+        const datos = encoger(lado, q);
         misFotos[id] = datos;
-        store.set("rvc-fotos", misFotos);
-        if (store.get("rvc-fotos", {})[id] !== datos) throw new Error("no se guardó");
-        render();
-      }catch(e){
+        if (await fotosDB.guardar(id, datos)){ aviso(""); render(); return; }
         delete misFotos[id];
-        aviso("No cupo: el almacén del teléfono está lleno. Quita alguna foto tuya de otro lugar.");
       }
+      aviso("No cupo, ni comprimiéndola. Libera espacio en el teléfono o quita alguna foto tuya de otro lugar.");
     };
-    img.onerror = () => aviso("No se pudo leer esa imagen.");
+    img.onerror = () => aviso("No se pudo leer esa imagen. Si es una foto del iPhone en formato HEIC, ábrela primero en Fotos y compártela como JPG.");
     img.src = lector.result;
   };
   lector.onerror = () => aviso("No se pudo leer el archivo.");
@@ -2350,4 +2414,5 @@ document.addEventListener("change", e => {
 });
 
 render();
+cargarMisFotos();   // trae tus fotos de IndexedDB y vuelve a pintar cuando estén
 })();
