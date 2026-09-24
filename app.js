@@ -451,7 +451,7 @@ function renderHoy(app){
     ${allTickets().some(t => t.date === d.date) ? `<h2 class="lbl">Tu boleto</h2><div class="row">${allTickets().filter(t => t.date === d.date).map(t => `<button class="btn primary" type="button" data-show-ticket="${esc(t.id)}">${esc(t.num || t.id)} · ${esc(t.dep || "")} → ${esc(t.to)}</button>`).join("")}</div>` : ""}
 
     ${slots.length ? `<h2 class="lbl">Tu rato libre</h2>${slots.map(s => `<p class="gp"><span class="tm">${esc(s[1])}</span> ${esc(s[2])}</p>`).join("")}` : ""}
-    ${routesHTML(d, slots)}
+    ${d.plan ? planHTML(d) : routesHTML(d, slots)}
 
     ${recs.length ? `<h2 class="lbl">Recomendado para este día · ${recs.length}</h2><div class="rail">${recs.map(recHTML).join("")}</div>` : ""}
     ${saved.length ? `<h2 class="lbl">Tus guardados en ${esc(cityIds.map(id => cityOf(id).es).join(" y "))}</h2><div class="rail">${saved.map(recHTML).join("")}</div>` : ""}
@@ -1492,7 +1492,9 @@ function openState(p, at){
   } else {
     const only = seg.match(/(\d{1,2}):(\d{2})/);
     open = +only[1] * 60 + +only[2];
-    close = /agotar/.test(norm(seg)) ? open + 240 : 1440 + 120;
+    // "desde 9:00; cierra entre 17:00 y 18:30": take the earliest closing time written elsewhere
+    const shut = norm(h).match(/cierra[^;·\d]*(\d{1,2}):(\d{2})/);
+    close = /agotar/.test(norm(seg)) ? open + 240 : shut && +shut[1] * 60 + +shut[2] > open ? +shut[1] * 60 + +shut[2] : 1440 + 120;
   }
   const now = at.min < open && close > 1440 && at.min + 1440 < close ? at.min + 1440 : at.min;
   if (now >= open && now < close) return {open: true, label: close - now <= 45 ? `Cierra pronto (${fmtClock(close)})` : `Abierto · cierra ${fmtClock(close)}`};
@@ -1607,6 +1609,46 @@ function routesHTML(d, slots){
   return `<h2 class="lbl">Tu ruta para el rato libre</h2>
     <div class="chips" role="toolbar" aria-label="Paradas de la ruta">${[3, 5, 8].map(k => `<button class="chip" type="button" data-routen="${k}" aria-pressed="${n === k}">${k} paradas</button>`).join("")}</div>
     ${parts.join("")}`;
+}
+
+/* ---------- plan del grupo: itinerario fijo armado a mano (trip.json → day.plan) ---------- */
+
+function planHTML(d){
+  const pl = d.plan;
+  if (!pl || !(pl.stops || []).length) return "";
+  const cid = pl.city || d.city;
+  const dow = new Date(d.date + "T12:00:00").getDay();
+  const toMin = t => { const m = String(t || "").match(/(\d{1,2}):(\d{2})/); return m ? +m[1] * 60 + +m[2] : null; };
+  const order = [];
+  let prev = null, n = 0;
+  const rows = pl.stops.map(s => {
+    const p = s.p ? P.find(q => q.c === cid && q.n === s.p) : null;
+    if (!p){
+      return `<li class="stop plan-note"><span class="stop-n">·</span><div class="plan-txt">${s.t ? `<span class="stop-meta">${esc(s.t)}</span> ` : ""}${esc(s.text || s.p || "")}</div></li>`;
+    }
+    let leg = "";
+    if (prev && p.ll){
+      const km = distKm(prev, p.ll), walk = km <= 1.2, mins = Math.max(3, Math.round(walk ? km * 13 : 6 + km * 3));
+      leg = `<li class="leg" aria-hidden="true">${walk ? "A pie" : "Taxi"} · ${fmtKm(km)} · ~${mins} min</li>`;
+    }
+    if (p.ll){ order.push(p); prev = p.ll; }
+    n += 1;
+    const at = toMin(s.t);
+    const st = at == null ? {label: ""} : openState(p, {dow, min: at + 20});
+    return `${leg}<li class="stop k-${esc(p.k)}">
+      <span class="stop-n">${n}</span>
+      <button class="rec-open" type="button" data-open="${p.id}"><b class="rec-title">${esc(p.n)}</b>
+        <span class="stop-meta">${s.t ? esc(s.t) + " · " : ""}${esc(CATS[p.k].split(/[ ,]/)[0])}${st.label ? ` · <span class="state ${st.open ? "open" : "closed"}">${esc(st.label)}</span>` : ""}</span>
+        ${s.x ? `<span class="plan-x">${esc(s.x)}</span>` : ""}</button>
+      <button class="go" type="button" data-go="${p.id}" aria-label="Mostrar ${esc(p.n)} al chofer">Ir</button>
+    </li>`;
+  });
+  return `<h2 class="lbl">${esc(pl.title || "Plan del grupo")}</h2>
+    <div class="route plan">
+      ${pl.intro ? `<p class="route-head">${pl.by ? `<b>Lo armó ${esc(pl.by)}</b> · ` : ""}${esc(pl.intro)}</p>` : ""}
+      ${order.length > 1 ? routeSVG(order, null) : ""}
+      <ol class="stops">${rows.join("")}</ol>
+    </div>`;
 }
 
 /* ---------- ¿qué hago ahora? ---------- */

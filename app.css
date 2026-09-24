@@ -603,6 +603,10 @@ p.tip b{font-weight:800;color:var(--k)}
 .state.open{color:var(--mint)}
 .state.closed{color:var(--red-2)}
 .state-chip{margin-left:6px}
+.plan-x{font-size:13px;line-height:1.4;color:var(--ink);margin-top:2px}
+.plan-note{background:transparent;box-shadow:none;padding:4px 12px}
+.plan-note .stop-n{background:none;color:var(--muted)}
+.plan-txt{font-size:13.5px;color:var(--ink)}
 .state-chip.open{background:var(--mint-soft);color:var(--mint)}
 .state-chip.closed{background:var(--red-soft);color:var(--red-2)}
 
