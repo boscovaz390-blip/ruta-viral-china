@@ -685,7 +685,8 @@ function stayHTML(h){
   return `<p class="stay">
     ${when ? `<b>${esc(when)}</b>` : ""}${nights ? `<span>${esc(nights)}</span>` : ""}${rooms ? `<span>${esc(rooms)}</span>` : ""}
   </p>
-  ${codes.length ? `<p class="stay conf">Confirmación ${codes.map(esc).join(" · ")}${h.holder ? ` · a nombre de ${esc(h.holder)}` : ""}</p>` : ""}`;
+  ${codes.length ? `<p class="stay conf">Confirmación ${codes.map(esc).join(" · ")}${h.holder ? ` · a nombre de ${esc(h.holder)}` : ""}</p>` : ""}
+  ${h.note ? `<p class="stay conf">${esc(h.note)}</p>` : ""}`;
 }
 
 function hotelsEditorHTML(){
@@ -1769,8 +1770,10 @@ const fmtOrig = g => g.cur === "CNY" ? fmtCNY(g.amt) : g.cur === "KRW" ? fmtKRW(
 function dayShort(iso){
   const d = TRIP.days.find(x => x.date === iso);
   if (d) return d.short;
-  const [y, m, dd] = iso.split("-");
-  return `${Number(dd)}/${Number(m)}/${y.slice(2)}`;
+  // días fuera del itinerario (la salida de México): mismo formato "Mié 21"
+  const [y, m, dd] = iso.split("-").map(Number);
+  const w = ["Dom", "Lun", "Mar", "Mié", "Jue", "Vie", "Sáb"][new Date(Date.UTC(y, m - 1, dd)).getUTCDay()];
+  return `${w} ${dd}`;
 }
 
 function barsHTML(title, rows, total){
