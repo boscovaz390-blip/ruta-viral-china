@@ -20,6 +20,8 @@ const store = {
   set(k, v){ try{ localStorage.setItem(k, JSON.stringify(v)); }catch(e){} }
 };
 let favs = new Set(store.get("rvc-favs", []));
+// guardados que te pasaron otros: {nombre: [ids]}; se ven como filtro aparte, no se mezclan con los tuyos
+let shared = store.get("rvc-shared", {});
 let seen = new Set(store.get("rvc-seen", []));   // los que ya visitaste
 // tus fotos: viven SOLO en este teléfono, nunca se publican con la app.
 // Antes iban en localStorage, donde solo cabían 17 (5 MB entre todas las claves).
@@ -95,6 +97,8 @@ const fmtMXN = n => "$" + Math.round(n).toLocaleString("es-MX");
 const fmtCNY = n => "¥" + Math.round(n).toLocaleString("es-MX");
 const fmtKRW = n => "₩" + Math.round(n).toLocaleString("es-MX");
 const mapURL = q => "https://maps.apple.com/?q=" + encodeURIComponent(q);
+// Amap (高德) has the small shops and cafés Apple Maps misses in China; callnative opens the app if it's installed
+const amapURL = (q, city) => "https://uri.amap.com/search?keyword=" + encodeURIComponent(q) + (city ? "&city=" + encodeURIComponent(city) : "") + "&src=rutaviral&callnative=1";
 const reduceMotion = () => matchMedia("(prefers-reduced-motion: reduce)").matches;
 
 function todayISO(){
@@ -256,6 +260,7 @@ function entryHTML(p, withCity){
       ${mustHTML(p)}
       ${p.pp ? `<figure class="prod"><img src="${esc(p.pp.file)}" alt="${esc(p.pp.alt || p.pp.sight || "")}" loading="lazy" decoding="async"><figcaption>${p.pp.sight ? `<b>${esc(p.pp.sight)}</b>` : ""}Foto${p.pp.kind === "ilustrativa" ? " ilustrativa" : ""}: ${creditHTML(p.pp)}</figcaption></figure>` : ""}
       ${p.t ? `<p class="tip"><b>Tip:</b> ${esc(p.t)}</p>` : ""}
+      ${p.dc ? `<p class="tip dc"><b>Qué ponerte:</b> ${esc(p.dc)}</p>` : ""}
       <button class="go go-wide" type="button" data-go="${p.id}" aria-label="Mostrar ${esc(p.n)} al chofer">Ir <small>· mostrar al chofer</small></button>
       ${foot ? `<p class="credit">${foot}</p>` : ""}
     </div>
@@ -303,13 +308,16 @@ function renderCity(app){
                   open: all.filter(abierto).length, seen: all.filter(p => seen.has(p.id)).length,
                   mios: all.filter(p => p.mio).length};
   Object.keys(CATS).forEach(k => counts[k] = all.filter(p => p.k === k).length);
-  const shown = state.cat === "all" ? all
+  const sharedDefs = Object.keys(shared).map(n => ["sh:" + n, "De " + n]);
+  sharedDefs.forEach(([k, , ]) => { const ids = new Set(shared[k.slice(3)] || []); counts[k] = all.filter(p => ids.has(p.id)).length; });
+  const shown = state.cat.startsWith("sh:") ? all.filter(p => (shared[state.cat.slice(3)] || []).includes(p.id))
+    : state.cat === "all" ? all
     : state.cat === "fav" ? all.filter(p => favs.has(p.id))
     : state.cat === "open" ? all.filter(abierto)
     : state.cat === "seen" ? all.filter(p => seen.has(p.id))
     : state.cat === "mios" ? all.filter(p => p.mio)
     : all.filter(p => p.k === state.cat);
-  const chipDefs = [["all", "Todo"], ["mios", "◆ Los que mandaste"], ["open", "Abierto ahora"], ...Object.entries(CATS), ["fav", "★ Guardados"], ["seen", "✓ Ya fui"]]
+  const chipDefs = [["all", "Todo"], ["mios", "◆ Los que mandaste"], ["open", "Abierto ahora"], ...Object.entries(CATS), ["fav", "★ Guardados"], ...sharedDefs, ["seen", "✓ Ya fui"]]
     .filter(([k]) => k === "all" || k === "fav" || counts[k] > 0);
   const banner = all.find(p => p.ph && p.ph.kind === "lugar" && p.k === "noc") || all.find(p => p.ph && p.ph.kind === "lugar");
 
@@ -334,6 +342,7 @@ function renderCity(app){
       : `<p class="empty">${state.cat === "fav" ? "Todavía no guardas lugares en esta ciudad. Toca ☆ en los que quieras tener a la mano."
           : state.cat === "open" ? `Nada abierto a esta hora en ${esc(c.es)}. Toca Todo para ver la lista completa.`
           : "Nada en esta categoría."}</p>`}
+    ${state.cat === "fav" || state.cat.startsWith("sh:") ? shareFavsHTML() : ""}
 
     ${(c.slots || []).length ? `<h2 class="lbl">Tus ratos libres</h2>
     <ul class="slots">
@@ -427,9 +436,11 @@ function renderHoy(app){
   const spentDay = gastos.filter(g => g.d === d.date);
   const here = cityOf(hotelCityFor(d));
   const showHint = !isStandalone() && !store.get("rvc-install-hidden", false);
+  const nx = isToday ? nextItem(d, cityNow(d.city).min) : {i: -1};
 
   app.innerHTML = `
     ${showHint ? `<button class="hint" type="button" data-tab="mas"><b>Instálala antes de volar</b> para usarla en China sin internet →</button>` : ""}
+    ${changesHTML(t)}
     <div class="daynav">
       <button class="btn" type="button" data-day="${prev ? prev.date : ""}" ${prev ? "" : "disabled"} aria-label="Día anterior">←</button>
       <div class="dn-title"><span class="dt">${esc(status)}</span><b>${esc(d.label)}</b></div>
@@ -446,7 +457,9 @@ function renderHoy(app){
     ${photos.length > 1 ? stripHTML(photos.slice(1)) : ""}
 
     <h2 class="lbl">Tu día</h2>
-    <ol class="tl day-tl">${d.items.map(it => `<li><span class="tm">${esc(it.time || "")}</span><span>${esc(it.text)}</span></li>`).join("")}</ol>
+    <ol class="tl day-tl">${d.items.map((it, j) => `<li class="${[it.was ? "changed" : "", j === nx.i ? "next" : ""].join(" ").trim()}">${j === nx.i ? `<span class="nx-badge">${esc(nx.label)}</span>` : ""}<span class="tm">${esc(it.time || "")}</span><span>${it.was ? `<small class="was">Cambió · ${esc(it.was)}</small>` : ""}${esc(it.text)}</span></li>`).join("")}</ol>
+    ${wearHTML(d)}
+    ${tipsDayHTML(d)}
     ${transfers.length ? `<div class="row go-row">${transfers.map(tr => `<button class="btn go-btn" type="button" data-transfer="${esc(tr.id)}">Ir · ${esc(tr.n)}</button>`).join("")}</div>` : ""}
     ${allTickets().some(t => t.date === d.date) ? `<h2 class="lbl">Tu boleto</h2><div class="row">${allTickets().filter(t => t.date === d.date).map(t => `<button class="btn primary" type="button" data-show-ticket="${esc(t.id)}">${esc(t.num || t.id)} · ${esc(t.dep || "")} → ${esc(t.to)}</button>`).join("")}</div>` : ""}
 
@@ -472,6 +485,81 @@ function renderHoy(app){
     </div>`;
 
   requestAnimationFrame(() => centerPressed("daystrip"));
+}
+
+// the next thing on today's list by the city's clock: "Ahora" if it started less than 15 min ago
+const hm = t => { const m = /^(\d{1,2}):(\d{2})$/.exec(t || ""); return m ? Number(m[1]) * 60 + Number(m[2]) : null; };
+function nextItem(d, now){
+  const i = d.items.findIndex(it => { const m = hm(it.time); return m != null && m >= now - 15; });
+  if (i < 0) return {i: -1};
+  const diff = hm(d.items[i].time) - now;
+  const label = diff <= 0 ? "Ahora" : diff < 60 ? `En ${diff} min` : `En ${Math.floor(diff / 60)} h${diff % 60 ? ` ${diff % 60} min` : ""}`;
+  return {i, label};
+}
+
+// what to wear: the day's activities plus tonight's reserved dinner
+function wearHTML(d){
+  const din = (TRIP.dinners || []).filter(x => x.date === d.date && x.dc);
+  if (!d.dc && !din.length) return "";
+  return `<div class="wear"><h2 class="lbl">Qué ponerte</h2>
+    ${d.dc ? `<p class="gp">${esc(d.dc)}</p>` : ""}
+    ${din.map(x => `<p class="gp"><b>Cena en ${esc(x.n)}:</b> ${esc(x.dc)}</p>`).join("")}</div>`;
+}
+
+// tips per guide: Intermex's rate per person per day; transfer-only days count as half (our call, not theirs)
+function tipCalc(c){
+  const T = TRIP.tips, days = c.full + c.half / 2, pax = c.pax || T.pax;
+  return {days, pax, guide: days * T.guide * pax, driver: days * T.driver * pax};
+}
+const usd = n => "US$" + Math.round(n).toLocaleString("es-MX");
+const tipMoney = n => `${usd(n)}${TRIP.tips.usd_cny ? ` · ≈ ¥${Math.round(n * TRIP.tips.usd_cny).toLocaleString("es-MX")}` : ""}`;
+function tipsDayHTML(d){
+  const T = TRIP.tips;
+  const c = T && (T.cities || []).find(x => x.last === d.date);
+  if (!c) return "";
+  const k = tipCalc(c);
+  return `<div class="tipday"><b>Hoy se despiden de ${esc(c.guide)}</b>
+    <p>Propina sugerida para el grupo: guía ${tipMoney(k.guide)}, chofer ${tipMoney(k.driver)}. En efectivo, en un sobre.</p>
+    <button class="btn" type="button" data-sub="propinas">Ver el cálculo →</button></div>`;
+}
+function propinasHTML(){
+  const T = TRIP.tips;
+  const rows = T.cities.map(c => ({c, k: tipCalc(c)}));
+  const tot = rows.reduce((a, {k}) => ({g: a.g + k.guide, d: a.d + k.driver}), {g: 0, d: 0});
+  return `<p class="gp">${esc(T.intro)}</p>
+    <div class="tips-list">${rows.map(({c, k}) => `<div class="tip-city">
+      <div class="tc-head"><b>${esc(cityOf(c.city).es)} · ${esc(c.guide)}</b><span>se entrega el ${esc(dayShort(c.last))}</span></div>
+      <p class="tc-days">${c.full} ${c.full === 1 ? "día" : "días"} de tour${c.half ? ` + ${c.half} de traslado (medio día)` : ""} · ${k.pax} personas</p>
+      <p>Guía <b>${tipMoney(k.guide)}</b> · Chofer <b>${tipMoney(k.driver)}</b></p>
+      ${c.note ? `<p class="tc-note">${esc(c.note)}</p>` : ""}
+    </div>`).join("")}</div>
+    <p class="gp"><b>Todo el viaje:</b> guías ${tipMoney(tot.g)} y choferes ${tipMoney(tot.d)}, en total ${tipMoney(tot.g + tot.d)} para el grupo (${usd((tot.g + tot.d) / T.pax)} por persona).</p>
+    <p class="fine">${esc(T.fine)}</p>`;
+}
+
+function cenasHTML(){
+  return `<div class="cenas">${TRIP.dinners.map((x, i) => `<article class="cena">
+    <div class="cena-when"><span>${esc(dayShort(x.date))}</span><b>${esc(x.time || "")}</b></div>
+    <div class="cena-main">
+      <h3>${esc(x.n)}</h3>
+      ${x.z ? `<div class="zh" lang="zh">${esc(x.z)}${x.a ? `<span class="addr">${esc(x.a)}</span>` : ""}</div>` : ""}
+      ${x.info ? `<p>${esc(x.info)}</p>` : ""}
+      ${x.dc ? `<p class="tip dc"><b>Qué ponerte:</b> ${esc(x.dc)}</p>` : ""}
+      ${x.z || x.a ? `<button class="go go-wide" type="button" data-cena="${i}">Ir <small>· mostrar al chofer</small></button>` : ""}
+    </div></article>`).join("")}</div>`;
+}
+
+// what moved in the latest itinerary, until they dismiss it; days already past drop off
+function changesHTML(t){
+  const ch = TRIP.changes;
+  if (!ch || store.get("rvc-changes-seen", "") === ch.v) return "";
+  const items = (ch.items || []).filter(x => !x.date || x.date >= t);
+  if (!items.length) return "";
+  return `<section class="changes" aria-label="${esc(ch.title)}">
+    <div class="ch-head"><b>${esc(ch.title)}</b><button class="ch-x" type="button" data-chg-seen aria-label="Ya lo vi">Ya lo vi</button></div>
+    ${ch.sub ? `<p class="ch-sub">${esc(ch.sub)}</p>` : ""}
+    <ul>${items.map(x => `<li><button type="button" data-day="${esc(x.date)}"><span class="tm">${esc(dayShort(x.date))}</span><span>${esc(x.txt)}${x.was ? `<small class="was">${esc(x.was)}</small>` : ""}</span></button></li>`).join("")}</ul>
+  </section>`;
 }
 
 // tonight's hotel on the day view: name, dates, confirmation and one tap to show the driver
@@ -627,6 +715,8 @@ window.addEventListener("popstate", () => {
 const TOPICS = {
   "ahora": {g: "viaje", icon: "clock", label: "¿Qué hago ahora?", desc: "Lo abierto y cerca según la hora"},
   "boletos": {g: "viaje", icon: "ticket", label: "Mis boletos", desc: "Vuelos y trenes en grande"},
+  "cenas": {g: "viaje", icon: "fork", label: "Cenas reservadas", desc: "Hora, depósito y qué ponerte"},
+  "propinas": {g: "viaje", icon: "coin", label: "Propinas", desc: "Cuánto juntar para cada guía"},
   "reservar-cuando": {g: "viaje", icon: "cal", label: "Qué reservar y cuándo", desc: "Fechas límite antes de volar"},
   "reservas": {g: "viaje", icon: "cal", label: "Reservaciones", desc: "Qué reservar y cómo"},
   "viajeros": {g: "viaje", icon: "people", label: "Viajeros", desc: "Quién va y su asiento"},
@@ -759,6 +849,8 @@ const VIRTUAL = [
   {id: "boletos", title: "Mis boletos", html: boletosHTML},
   {id: "reservas", title: "Reservaciones", html: reservasHTML, when: () => P.some(p => p.r)},
   {id: "viajeros", title: "Viajeros", html: viajerosHTML},
+  {id: "cenas", title: "Cenas reservadas", intro: "Las cenas que ya tienen mesa. Toca Ir para enseñarle la dirección al chofer.", html: cenasHTML, when: () => (TRIP.dinners || []).length},
+  {id: "propinas", title: "Propinas", html: propinasHTML, when: () => TRIP.tips && (TRIP.tips.cities || []).length},
   {id: "tren-avion", title: "Tren y avión paso a paso", html: () => { const L = GUIDE.logi || {}; return stepsHTML(L.rail) + stepsHTML(L.air_dom) + stepsHTML(L.air_intl); }, when: () => GUIDE.logi && GUIDE.logi.rail},
   {id: "clima", title: "Clima y qué ropa llevar", html: climaHTML, when: () => GUIDE.logi && (GUIDE.logi.climate || []).length},
   {id: "checklist", title: "Checklist del viaje", html: checklistHTML, when: () => GUIDE.logi && (GUIDE.logi.checklist || []).length},
@@ -1177,6 +1269,36 @@ function viajerosHTML(){
     <div class="calc"><label for="imp">Pegar código</label><textarea id="imp" class="imp" rows="3"></textarea>
       <div class="row"><button class="btn" type="button" data-import>Importar</button><span class="saved-msg" id="impmsg" aria-live="polite"></span></div>
     </div>`;
+}
+
+// pasar guardados por WhatsApp: RVG1:<base64 de {n, ids}>
+function shareFavsHTML(){
+  const me = (store.get("rvc-pax", []).find(x => x.id === "yo") || {}).n || store.get("rvc-me", "");
+  const others = Object.keys(shared);
+  return `<section class="sharefavs">
+    <h2 class="lbl">Pasar guardados al grupo</h2>
+    <p class="gp">Manda tus ★ por WhatsApp; a quien los pegue le salen como filtro “De ${esc(me || "tu nombre")}” en cada ciudad, sin mezclarse con los suyos.</p>
+    <div class="calc"><label for="fav-me">Tu nombre</label><input id="fav-me" maxlength="30" value="${esc(me)}" placeholder="Ej. Xime">
+      <div class="row"><button class="btn primary" type="button" data-share-favs ${favs.size ? "" : "disabled"}>Compartir mis ${favs.size} guardados</button><span class="saved-msg" id="favmsg" aria-live="polite"></span></div></div>
+    <div class="calc"><label for="fav-imp">Pegar guardados de alguien</label><textarea id="fav-imp" class="imp" rows="2"></textarea>
+      <div class="row"><button class="btn" type="button" data-import-favs>Agregar</button><span class="saved-msg" id="favimpmsg" aria-live="polite"></span></div></div>
+    ${others.length ? `<p class="gp">Tienes los de: ${others.map(n => `<button class="chip" type="button" data-del-shared="${esc(n)}" aria-label="Quitar los de ${esc(n)}">${esc(n)} ✕</button>`).join(" ")}</p>` : ""}
+  </section>`;
+}
+function favsCode(name){
+  return "RVG1:" + btoa(unescape(encodeURIComponent(JSON.stringify({n: name, ids: [...favs]}))));
+}
+function importFavs(text){
+  const m = String(text || "").match(/RVG1:([A-Za-z0-9+/=]+)/);
+  if (!m) return "Ese código no es de guardados.";
+  let d;
+  try{ d = JSON.parse(decodeURIComponent(escape(atob(m[1])))); }catch(e){ return "El código está incompleto: cópialo otra vez completo."; }
+  const ids = (d.ids || []).filter(id => byId[id]);
+  if (!ids.length) return "No trae lugares que existan en esta versión.";
+  const n = String(d.n || "Alguien").trim().slice(0, 30) || "Alguien";
+  shared[n] = ids;
+  store.set("rvc-shared", shared);
+  return "";
 }
 
 function addPax(){
@@ -2106,8 +2228,26 @@ document.addEventListener("click", e => {
     else copyTo(text, "expmsg", "Código copiado: pégalo en WhatsApp");
     return;
   }
+  if (el("[data-share-favs]")){
+    const name = ((document.getElementById("fav-me") || {}).value || "").trim();
+    if (!name){ document.getElementById("fav-me").focus(); return; }
+    store.set("rvc-me", name);
+    const text = favsCode(name);
+    if (navigator.share) navigator.share({title: `Guardados de ${name}`, text}).catch(() => copyTo(text, "favmsg", "Código copiado"));
+    else copyTo(text, "favmsg", "Código copiado: pégalo en WhatsApp");
+    return;
+  }
+  if (el("[data-import-favs]")){
+    const err = importFavs((document.getElementById("fav-imp") || {}).value);
+    if (!err) render();
+    const m = document.getElementById("favimpmsg");
+    if (m) m.textContent = err || "Agregado";
+    return;
+  }
+  if ((x = el("[data-del-shared]"))){ delete shared[x.dataset.delShared]; store.set("rvc-shared", shared); if (state.cat.startsWith("sh:")) state.cat = "fav"; render(); return; }
   if (el("[data-import]")){
-    const err = importCode((document.getElementById("imp") || {}).value);
+    const raw = (document.getElementById("imp") || {}).value;
+    const err = /RVG1:/.test(raw || "") ? importFavs(raw) : importCode(raw);
     if (!err) render();
     const m = document.getElementById("impmsg");
     if (m) m.textContent = err || "Importado";
@@ -2143,6 +2283,12 @@ document.addEventListener("click", e => {
     store.set("rvc-booked", all);
     render(); return;
   }
+  if ((x = el("[data-cena]"))){
+    const it = TRIP.dinners[Number(x.dataset.cena)], c = it && cityOf(it.city);
+    if (it) openCard({ask: "师傅，请带我去这里：", big: it.z || it.n, where: it.a, es: [it.n, it.time].filter(Boolean).join(" · "), copy: [it.z, it.a].filter(Boolean).join(" "), map: mapURL([c && c.sc, it.z, it.a].filter(Boolean).join(" ")), amap: amapURL(it.z || it.n, c && c.sc), speak: {text: it.z || "", lang: "zh"}});
+    return;
+  }
+  if ((x = el("[data-chg-seen]"))){ store.set("rvc-changes-seen", TRIP.changes.v); render(); return; }
   if ((x = el("[data-day]"))){ goDay(x.dataset.day); return; }
   if ((x = el("[data-pick-city]"))){ setView("ciudades", {city: x.dataset.pickCity}); return; }
   if ((x = el("[data-sub]"))){ setView("mas", {sub: x.dataset.sub}); return; }
@@ -2251,13 +2397,14 @@ const dz = document.getElementById("dz");
 const da = document.getElementById("da");
 const dn = document.getElementById("dn");
 const dmap = document.getElementById("dmap");
+const damap = document.getElementById("damap");
 const dcopy = document.getElementById("dcopy");
 const dimg = document.getElementById("dimg");
 const dsay = document.getElementById("dsay");
 let copyText = "";
 let sayNow = null;
 
-function openCard({ask, big, where, es, copy, map, speak: sp, img}){
+function openCard({ask, big, where, es, copy, map, amap, speak: sp, img}){
   dimg.hidden = !img;
   if (img) dimg.src = img; else dimg.removeAttribute("src");
   sayNow = sp && sp.text && canSpeak ? sp : null;
@@ -2269,6 +2416,8 @@ function openCard({ask, big, where, es, copy, map, speak: sp, img}){
   dn.textContent = es || "";
   dmap.hidden = !map;
   if (map) dmap.href = map;
+  damap.hidden = !amap;
+  if (amap) damap.href = amap;
   copyText = copy || "";
   dcopy.hidden = !copy;
   dcopy.textContent = "Copiar para Didi";
@@ -2284,13 +2433,14 @@ function openDriver(p){
     ask: ko ? "기사님, 여기로 가 주세요:" : "师傅，请带我去这里：",
     big: p.z, where: p.a, es: p.n + " · " + c.es, copy: full,
     map: ko ? "https://map.naver.com/p/search/" + encodeURIComponent(p.z) : mapURL(full),
+    amap: ko ? null : amapURL(p.z, c.sc),
     speak: {text: p.z, lang: ko ? "ko" : "zh"}
   });
 }
 
 function openTransfer(tr){
   if (!tr) return;
-  openCard({ask: "师傅，请带我去这里：", big: tr.z, where: transferLabel(tr), es: tr.n, copy: tr.z, map: mapURL(tr.z), speak: {text: tr.z, lang: "zh"}});
+  openCard({ask: "师傅，请带我去这里：", big: tr.z, where: transferLabel(tr), es: tr.n, copy: tr.z, map: mapURL(tr.z), amap: amapURL(tr.z), speak: {text: tr.z, lang: "zh"}});
 }
 
 function openHotel(cid){
@@ -2310,6 +2460,7 @@ function openHotel(cid){
     ask: ko ? "기사님, 이 호텔로 가 주세요:" : "师傅，请带我回这个酒店：",
     big: h.z || h.n, where: h.a, es: [h.n, c.es, h.t].filter(Boolean).join(" · "),
     copy: full, map: ko ? "https://map.naver.com/p/search/" + encodeURIComponent(h.z || h.n) : mapURL(c.sc + " " + full),
+    amap: ko ? null : amapURL(h.z || h.n, c.sc),
     speak: {text: h.z || "", lang: ko ? "ko" : "zh"}
   });
 }
@@ -2390,6 +2541,9 @@ async function poll(){
   const done = await updateOffline();
   if (!done && polls++ < 200) setTimeout(poll, 1500);
 }
+
+// back in front: refresh Hoy so "lo que sigue" matches the clock
+document.addEventListener("visibilitychange", () => { if (!document.hidden && state.tab === "hoy" && !state.place) render(); });
 
 if ("serviceWorker" in navigator){
   // updateViaCache "none": el sw.js nunca se sirve desde la caché HTTP, así que

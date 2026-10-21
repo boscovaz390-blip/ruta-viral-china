@@ -680,3 +680,44 @@ dialog#driver::backdrop{background:#fff}
 .illu.mia{background:var(--mint);color:#fff}
 /* enlace al video de origen: se ve, pero no compite con "Ir · mostrar al chofer" */
 .btn.video{background:var(--ink);color:#fff;box-shadow:var(--e1)}
+
+/* itinerary changes */
+.changes{margin-top:12px;background:var(--red-soft);border-radius:24px;padding:14px 16px;box-shadow:var(--e1)}
+.ch-head{display:flex;align-items:center;justify-content:space-between;gap:12px}
+.ch-head b{font-family:var(--display);font-size:17px;font-weight:800;color:var(--red-2)}
+.ch-x{border:0;background:var(--surface);color:var(--ink);border-radius:999px;padding:6px 12px;font:inherit;font-size:13px;font-weight:700;cursor:pointer}
+.ch-sub{margin:2px 0 6px;font-size:12.5px;color:var(--muted)}
+.changes ul{list-style:none;margin:0;padding:0}
+.changes li+li{border-top:1.5px dashed rgba(200,16,46,.2)}
+.changes li button{display:grid;grid-template-columns:3.6rem 1fr;gap:12px;width:100%;padding:10px 0;border:0;background:none;color:var(--ink);font:inherit;font-size:14px;text-align:left;cursor:pointer}
+.was{display:block;font-size:12px;font-weight:700;color:var(--muted)}
+.changes .was{text-decoration:line-through;font-weight:600}
+.day-tl li.changed .was{display:table;margin-bottom:4px;padding:2px 8px;border-radius:999px;background:var(--red-soft);color:var(--red-2)}
+
+/* lo que sigue */
+.day-tl li.next{position:relative;background:var(--yellow-soft);margin-inline:-16px;padding-inline:16px;border-radius:16px;border-top-color:transparent}
+.day-tl li.next + li{border-top-color:transparent}
+.nx-badge{grid-column:1 / -1;justify-self:start;padding:3px 10px;border-radius:999px;background:var(--ink);color:#fff;font-size:12px;font-weight:800}
+/* qué ponerte, propinas, cenas */
+.wear{margin-top:4px}
+.tip.dc{background:var(--violet-soft)}
+.tipday{margin-top:16px;padding:14px 16px;border-radius:24px;background:var(--mint-soft);box-shadow:var(--e1)}
+.tipday b{font-family:var(--display);font-size:16px;font-weight:800;color:var(--mint)}
+.tipday p{margin:4px 0 10px;font-size:14px}
+.tips-list{display:grid;gap:12px;margin-block:12px}
+.tip-city{background:var(--surface);border-radius:20px;padding:14px 16px;box-shadow:var(--e1)}
+.tip-city p{margin:4px 0 0;font-size:14px}
+.tc-head{display:flex;flex-wrap:wrap;justify-content:space-between;gap:4px 12px}
+.tc-head b{font-family:var(--display);font-weight:800}
+.tc-head span,.tc-days,.tc-note{color:var(--muted);font-size:13px}
+.cenas{display:grid;gap:12px}
+.cena{display:grid;grid-template-columns:4.2rem 1fr;gap:12px;background:var(--surface);border-radius:24px;padding:14px 16px;box-shadow:var(--e1)}
+.cena-when{display:flex;flex-direction:column;color:var(--red);font-weight:800}
+.cena-when span{font-size:13px}
+.cena-when b{font-size:20px;font-family:var(--display);font-variant-numeric:tabular-nums}
+.cena-main h3{margin:0 0 4px;font-family:var(--display);font-size:18px}
+.cena-main p{margin:6px 0;font-size:14px}
+.cena-main .zh{font-family:var(--cjk);font-size:15px}
+.cena-main .addr{display:block;font-size:13px;color:var(--muted)}
+.sharefavs{margin-top:8px}
+.sharefavs input{width:100%}
