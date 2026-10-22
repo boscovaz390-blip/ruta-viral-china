@@ -958,6 +958,8 @@ function renderMas(app){
         <li><b>Android:</b> en Chrome, menú ⋮ → <b>Instalar app</b>.</li>
         <li>Pruébala en modo avión antes de volar y ábrela un par de veces en los días previos.</li>
       </ol>
+      <div class="row"><button class="btn" type="button" data-check-update>Buscar actualización</button><span class="saved-msg" id="updmsg" aria-live="polite"></span></div>
+      <p class="fine">Versión ${esc(window.ASSETS_VERSION || "")}${TRIP.changes ? ` · itinerario del ${esc(TRIP.changes.v.split("-").reverse().slice(0, 2).join("/"))}` : ""}</p>
     </section>
 
     <h2 class="lbl">Para todo el viaje</h2>
@@ -2283,6 +2285,15 @@ document.addEventListener("click", e => {
     store.set("rvc-booked", all);
     render(); return;
   }
+  if (el("[data-check-update]")){
+    const m = document.getElementById("updmsg");
+    if (!swReg){ if (m) m.textContent = "Ábrela con internet para buscar."; return; }
+    if (m) m.textContent = "Buscando…";
+    Promise.resolve(swReg.update()).then(() => {
+      if (m) m.textContent = swReg.installing || swReg.waiting ? "Hay versión nueva: bajándola…" : "Ya tienes la última versión.";
+    }).catch(() => { if (m) m.textContent = "Sin conexión: inténtalo con Wi-Fi."; });
+    return;
+  }
   if ((x = el("[data-cena]"))){
     const it = TRIP.dinners[Number(x.dataset.cena)], c = it && cityOf(it.city);
     if (it) openCard({ask: "师傅，请带我去这里：", big: it.z || it.n, where: it.a, es: [it.n, it.time].filter(Boolean).join(" · "), copy: [it.z, it.a].filter(Boolean).join(" "), map: mapURL([c && c.sc, it.z, it.a].filter(Boolean).join(" ")), amap: amapURL(it.z || it.n, c && c.sc), speak: {text: it.z || "", lang: "zh"}});
@@ -2545,6 +2556,14 @@ async function poll(){
 // back in front: refresh Hoy so "lo que sigue" matches the clock
 document.addEventListener("visibilitychange", () => { if (!document.hidden && state.tab === "hoy" && !state.place) render(); });
 
+let swReg = null;
+function updBar(on){
+  let bar = document.getElementById("updbar");
+  if (!on){ if (bar) bar.remove(); return; }
+  if (bar) return;
+  document.body.insertAdjacentHTML("afterbegin", `<div class="updbar" id="updbar" role="status"><b>Bajando la versión nueva…</b> Déjala abierta con Wi-Fi: se recarga sola cuando termine.</div>`);
+}
+
 if ("serviceWorker" in navigator){
   // updateViaCache "none": el sw.js nunca se sirve desde la caché HTTP, así que
   // una versión nueva se detecta aunque GitHub Pages lo mande con max-age=600.
@@ -2552,7 +2571,16 @@ if ("serviceWorker" in navigator){
     poll();
     // buscar versión nueva al abrir y cada vez que la app vuelve al frente:
     // instalada en la pantalla de inicio no hay navegación que lo dispare sola.
-    const buscar = () => { try{ reg.update(); }catch(e){} };
+    const buscar = () => { try{ return reg.update(); }catch(e){ return Promise.resolve(); } };
+    swReg = reg;
+    // mientras baja una versión nueva, avisar: si cierran la app a la mitad se quedan con la vieja
+    const bajando = w => {
+      if (!w || !habiaSW) return;
+      updBar(true);
+      w.addEventListener("statechange", () => { if (w.state === "redundant") updBar(false); });
+    };
+    bajando(reg.installing);
+    reg.addEventListener("updatefound", () => bajando(reg.installing));
     buscar();
     document.addEventListener("visibilitychange", () => { if (!document.hidden) buscar(); });
     window.addEventListener("focus", buscar);
@@ -2562,7 +2590,7 @@ if ("serviceWorker" in navigator){
   // el controlador: recargamos una sola vez para que se vean los lugares nuevos.
   // Solo si YA había controlador: en la primera visita clients.claim() también
   // dispara este evento y una recarga ahí sería gratuita y molesta.
-  const habiaSW = !!navigator.serviceWorker.controller;
+  var habiaSW = !!navigator.serviceWorker.controller;
   let recargando = false;
   navigator.serviceWorker.addEventListener("controllerchange", () => {
     if (!habiaSW || recargando) return;

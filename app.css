@@ -721,3 +721,6 @@ dialog#driver::backdrop{background:#fff}
 .cena-main .addr{display:block;font-size:13px;color:var(--muted)}
 .sharefavs{margin-top:8px}
 .sharefavs input{width:100%}
+
+.updbar{position:sticky;top:0;z-index:50;padding:10px 16px;background:var(--ink);color:#fff;font-size:13.5px;text-align:center}
+.updbar b{color:var(--yellow)}
