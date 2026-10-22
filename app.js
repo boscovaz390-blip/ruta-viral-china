@@ -2548,8 +2548,11 @@ async function updateOffline(){
 }
 
 let polls = 0;
+let pedido = false;
 async function poll(){
   const done = await updateOffline();
+  // the photos come after the app itself: ask the worker to keep saving them while the app is open
+  if (!done && !pedido && navigator.serviceWorker.controller){ pedido = true; navigator.serviceWorker.controller.postMessage({type: "recache"}); }
   if (!done && polls++ < 200) setTimeout(poll, 1500);
 }
 
